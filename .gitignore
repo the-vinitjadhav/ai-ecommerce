@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+env.bak/
+venv.bak/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Database
+*.sqlite3
+*.db
+*.sql
+!sql/01_create_database.sql
+!sql/02_create_tables.sql
+!sql/03_seed_data.sql
+
+# OS files
+.DS_Store
+Thumbs.db

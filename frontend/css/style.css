@@ -1,0 +1,79 @@
+/* Simple fresher-style CSS */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.product-card {
+    transition: transform 0.2s;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.product-card:hover {
+    transform: translateY(-5px);
+}
+
+.product-card img {
+    height: 200px;
+    object-fit: cover;
+}
+
+.price {
+    color: #28a745;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.stock-badge {
+    font-size: 0.8rem;
+}
+
+.cart-item img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+}
+
+.order-status {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+}
+
+.status-pending { background-color: #ffc107; color: #212529; }
+.status-confirmed { background-color: #17a2b8; color: white; }
+.status-shipped { background-color: #007bff; color: white; }
+.status-delivered { background-color: #28a745; color: white; }
+.status-cancelled { background-color: #dc3545; color: white; }
+
+.admin-sidebar {
+    min-height: 100vh;
+    background-color: #343a40;
+    color: white;
+}
+
+.admin-sidebar a {
+    color: #adb5bd;
+    text-decoration: none;
+    padding: 10px 20px;
+    display: block;
+}
+
+.admin-sidebar a:hover {
+    color: white;
+    background-color: #495057;
+}
+
+.admin-sidebar .active {
+    color: white;
+    background-color: #007bff;
+}
+
+.alert {
+    margin-top: 10px;
+}
