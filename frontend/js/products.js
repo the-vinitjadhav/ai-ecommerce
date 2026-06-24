@@ -31,7 +31,7 @@ function displayProducts(products) {
         const card = `
             <div class="col-md-4 mb-4">
                 <div class="card product-card h-100">
-                    <img src="${product.image_url || 'https://via.placeholder.com/300x200?text=No+Image'}" 
+                    <img src="${product.image_url || 'images/placeholder.jpg'}" 
                          class="card-img-top" alt="${product.product_name}">
                     <div class="card-body">
                         <h5 class="card-title">${product.product_name}</h5>
