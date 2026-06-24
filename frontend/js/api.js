@@ -146,3 +146,6 @@ async function updateOrderStatus(orderId, status) {
         body: JSON.stringify({ status })
     });
 }
+
+// Make cart functions globally accessible
+window.updateCartCount = updateCartCount;

@@ -1,0 +1,16 @@
+/* Floating Chat Widget Styles */
+#ai-chat-widget {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#chat-popup {
+    display: none;
+}
+
+@media (max-width: 480px) {
+    #chat-popup {
+        width: 90vw;
+        right: 5vw;
+        bottom: 80px;
+    }
+}

@@ -72,6 +72,7 @@ async function searchProducts() {
 }
 
 // Add to cart
+// Add to cart
 async function addToCart(productId) {
     const userId = localStorage.getItem('userId');
     if (!userId) {
@@ -82,13 +83,13 @@ async function addToCart(productId) {
     
     try {
         await addToCart(userId, productId, 1);
-        updateCartCount();
         alert('Product added to cart!');
+        // Update the cart count (but don't reload the entire cart)
+        await updateCartCount();
     } catch (error) {
         alert('Error adding to cart: ' + error.message);
     }
 }
-
 // Update cart count
 async function updateCartCount() {
     const userId = localStorage.getItem('userId');
@@ -102,6 +103,7 @@ async function updateCartCount() {
         cartCount.textContent = totalItems;
     } catch (error) {
         console.error('Error updating cart count:', error);
+        cartCount.textContent = '0';
     }
 }
 

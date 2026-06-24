@@ -343,7 +343,7 @@ class ChatRequest(BaseModel):
 # AI TOOLS (Native Python functions)
 # ============================================================
 def get_product_recommendation(query: str) -> str:
-    """Get product recommendations based on a search query (supports category + price)."""
+    """Get product recommendations based on a search query (with clickable links)."""
     print(f"\n🔍 AI Tool: Searching for: {query}")
     
     conn = get_db_connection()
@@ -352,7 +352,7 @@ def get_product_recommendation(query: str) -> str:
     
     cursor = conn.cursor(dictionary=True)
     
-    # 1. Extract price limit from query (e.g., "under 50000" → 50000)
+    # Extract price limit
     price_limit = None
     import re
     match = re.search(r'under\s*(\d+)', query, re.IGNORECASE)
@@ -360,8 +360,7 @@ def get_product_recommendation(query: str) -> str:
         price_limit = int(match.group(1))
         print(f"💰 Extracted price limit: {price_limit}")
     
-    # 2. Extract category keyword (e.g., "phones", "laptops", "shoes")
-    # Map user-friendly keywords to actual database category_names
+    # Extract category
     category_map = {
         "phone": "Electronics",
         "laptop": "Laptops",
@@ -377,7 +376,7 @@ def get_product_recommendation(query: str) -> str:
         "bag": "Clothing",
         "camera": "Electronics"
     }
-    # 2. Extract category keyword and map it to actual database category_name
+    
     detected_category = None
     for keyword, db_category in category_map.items():
         if keyword in query.lower():
@@ -385,52 +384,44 @@ def get_product_recommendation(query: str) -> str:
             print(f"📂 Detected keyword: '{keyword}' → Mapped to category: '{detected_category}'")
             break
     
-    # 3. Build the SQL query dynamically
+    # Build SQL
     if price_limit and detected_category:
-        # Filter by BOTH price AND category_name
         sql = """
-            SELECT product_name, price, rating, category_name 
+            SELECT product_id, product_name, price, rating, category_name 
             FROM products 
             WHERE price <= %s 
             AND category_name = %s
             LIMIT 5
         """
         params = (price_limit, detected_category)
-        print(f"📝 Executing SQL (Price + Category): {sql}")
-
     elif price_limit:
-        # Filter by price ONLY
         sql = """
-            SELECT product_name, price, rating, category_name 
+            SELECT product_id, product_name, price, rating, category_name 
             FROM products 
             WHERE price <= %s
             LIMIT 5
         """
         params = (price_limit,)
-        print(f"📝 Executing SQL (Price Only): {sql}")
-
     elif detected_category:
-        # Filter by category_name ONLY
         sql = """
-            SELECT product_name, price, rating, category_name 
+            SELECT product_id, product_name, price, rating, category_name 
             FROM products 
             WHERE category_name = %s
             LIMIT 5
         """
         params = (detected_category,)
-        print(f"📝 Executing SQL (Category Only): {sql}")
-
     else:
-        # Full text search (fallback)
         sql = """
-            SELECT product_name, price, rating, category_name 
+            SELECT product_id, product_name, price, rating, category_name 
             FROM products 
             WHERE product_name LIKE %s 
-            OR description LIKE %s
+               OR description LIKE %s
             LIMIT 5
         """
         params = (f"%{query}%", f"%{query}%")
-        print(f"📝 Executing SQL (Full Text): {sql}")
+    
+    print(f"📝 Executing SQL: {sql}")
+    print(f"📦 With params: {params}")
     
     try:
         cursor.execute(sql, params)
@@ -444,11 +435,21 @@ def get_product_recommendation(query: str) -> str:
     if not products:
         return f"No products found for '{query}'."
     
-    result = "Recommended products:\n"
+    # Format response with clickable links (HTML format)
+    result = "🛍️ <strong>Recommended products:</strong><br><br>"
     for p in products:
-        result += f"- {p['product_name']} (₹{p['price']}, Rating: {p['rating']}/5, Category: {p['category_name']})\n"
+        # Create a clickable link to the product page
+        result += f"""
+        <div style="border-bottom:1px solid #eee; padding:8px 0;">
+            <a href="/products.html" style="color:#667eea; font-weight:600; text-decoration:none;">
+                {p['product_name']}
+            </a><br>
+            <span style="color:#333;">₹{p['price']}</span> 
+            <span style="color:#888; font-size:0.9rem;">| Rating: {p['rating']}/5</span>
+            <span style="color:#888; font-size:0.9rem;">| {p['category_name']}</span>
+        </div>
+        """
     return result
-
 def place_order(user_id: int, product_name: str, quantity: int) -> str:
     """Place an order for a specific product by name."""
     conn = get_db_connection()
