@@ -31,10 +31,15 @@ function displayProducts(products) {
         const card = `
             <div class="col-md-4 mb-4">
                 <div class="card product-card h-100">
-                    <img src="${product.image_url || 'images/placeholder.jpg'}" 
-                         class="card-img-top" alt="${product.product_name}">
+                    <a href="product.html?id=${product.product_id}">
+                        <img src="${product.image_url || 'images/placeholder.jpg'}" 
+                             class="card-img-top" alt="${product.product_name}"
+                             onerror="this.onerror=null; this.src='https://via.placeholder.com/300x250?text=No+Image';">
+                    </a>
                     <div class="card-body">
-                        <h5 class="card-title">${product.product_name}</h5>
+                        <a href="product.html?id=${product.product_id}" style="text-decoration: none; color: inherit;">
+                            <h5 class="card-title">${product.product_name}</h5>
+                        </a>
                         <p class="card-text text-muted">${product.description || ''}</p>
                         <div class="d-flex justify-content-between align-items-center">
                             <span class="price">₹${product.price}</span>
@@ -43,8 +48,8 @@ function displayProducts(products) {
                             </span>
                         </div>
                         <div class="mt-2">
-                            <button class="btn btn-primary btn-sm w-100" onclick="addToCart(${product.product_id})">
-                                Add to Cart
+                            <button class="btn btn-primary btn-sm w-100" onclick="handleUserCartClick(${product.product_id})">
+                              Add to Cart
                             </button>
                         </div>
                     </div>
@@ -64,32 +69,46 @@ async function searchProducts() {
     }
     
     try {
-        const products = await searchProducts(keyword);
+        // FIXED: Call the renamed apiSearchProducts to prevent infinite loop
+        const products = await apiSearchProducts(keyword);
         displayProducts(products);
     } catch (error) {
         console.error('Error searching products:', error);
     }
 }
 
-// Add to cart
-// Add to cart
-async function addToCart(productId) {
+// Add to cart safely without loops
+async function handleUserCartClick(productId) {
     const userId = localStorage.getItem('userId');
     if (!userId) {
-        alert('Please login first!');
-        window.location.href = 'login.html';
+        showToast('Please login first!', 'error'); // NEW TOAST UI
+        setTimeout(() => window.location.href = 'login.html', 1500); // Redirect after 1.5s
         return;
     }
     
     try {
-        await addToCart(userId, productId, 1);
-        alert('Product added to cart!');
-        // Update the cart count (but don't reload the entire cart)
-        await updateCartCount();
+        // Bypass api.js entirely and do the CRUD request right here
+        const response = await fetch(`http://127.0.0.1:8000/api/cart/${userId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_id: productId, quantity: 1 })
+        });
+
+        if (!response.ok) throw new Error("Backend CRUD failed");
+
+        showToast('Product added to cart!', 'success'); // NEW TOAST UI
+
+        // Update the count safely without relying on external files
+        const cartResponse = await fetch(`http://127.0.0.1:8000/api/cart/${userId}`);
+        const cartItems = await cartResponse.json();
+        const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+        document.getElementById('cart-count').textContent = totalItems;
+
     } catch (error) {
-        alert('Error adding to cart: ' + error.message);
+        showToast('Error: ' + error.message, 'error'); // NEW TOAST UI
     }
 }
+
 // Update cart count
 async function updateCartCount() {
     const userId = localStorage.getItem('userId');

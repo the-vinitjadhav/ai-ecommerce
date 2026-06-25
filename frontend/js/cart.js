@@ -3,7 +3,6 @@
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Load cart, then update the count
     loadCartAndUpdate();
     checkAuth();
 });
@@ -16,11 +15,8 @@ async function loadCartAndUpdate() {
     }
     
     try {
-        // Load cart first
         const items = await getCart(userId);
         displayCart(items);
-        
-        // Update count AFTER cart is loaded (no overlap)
         await updateCartCount();
     } catch (error) {
         console.error('Error loading cart:', error);
@@ -48,12 +44,15 @@ function displayCart(items) {
     
     items.forEach(item => {
         total += item.total_price;
+        // FIXED: Added onerror image fallback
         html += `
             <div class="card mb-3 cart-item">
                 <div class="row g-0">
                     <div class="col-md-2">
                         <img src="${item.image_url || 'images/placeholder.jpg'}" 
-                             class="img-fluid rounded-start" alt="${item.product_name}">
+                             class="img-fluid rounded-start" 
+                             alt="${item.product_name}"
+                             onerror="this.onerror=null; this.src='https://via.placeholder.com/80?text=No+Image';">
                     </div>
                     <div class="col-md-8">
                         <div class="card-body">
@@ -99,7 +98,6 @@ async function removeItem(productId) {
     
     try {
         await removeFromCart(userId, productId);
-        // Reload cart and update count
         await loadCartAndUpdate();
     } catch (error) {
         alert('Error removing item: ' + error.message);

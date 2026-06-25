@@ -143,3 +143,112 @@ body {
     font-size: 1.2rem;
     opacity: 0.9;
 }
+/* =========================================
+   AI PRODUCT CARD (Chat & Widget Styles)
+   ========================================= */
+.ai-product-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 18px;
+    margin-top: 15px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    max-width: 320px; 
+}
+
+.ai-product-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    border-color: #cbd5e1;
+}
+
+.ai-card-title {
+    margin: 0 0 8px 0;
+    color: #1e293b;
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.ai-card-price {
+    color: #059669; /* Emerald green for price */
+    font-weight: 800;
+    font-size: 1.3rem;
+    margin-bottom: 15px;
+    display: inline-block;
+}
+
+.ai-card-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+    border: none;
+    padding: 12px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    width: 100%;
+    box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ai-card-btn:hover {
+    background: linear-gradient(135deg, #5a6fd6 0%, #68428f 100%);
+    box-shadow: 0 6px 15px rgba(102, 126, 234, 0.4);
+    transform: translateY(-2px);
+}
+
+.ai-card-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 5px rgba(102, 126, 234, 0.3);
+}
+
+/* =========================================
+   TOAST NOTIFICATIONS
+   ========================================= */
+#toast-container {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none; /* Lets users click through the container */
+}
+
+.custom-toast {
+    color: white;
+    padding: 12px 24px;
+    border-radius: 50px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideUpFade 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    opacity: 0;
+}
+
+.custom-toast.success {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%); /* Emerald Green */
+}
+
+.custom-toast.error {
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); /* Ruby Red */
+}
+
+@keyframes slideUpFade {
+    from { transform: translateY(30px) scale(0.9); opacity: 0; }
+    to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes fadeOutDown {
+    from { transform: translateY(0) scale(1); opacity: 1; }
+    to { transform: translateY(20px) scale(0.9); opacity: 0; }
+}

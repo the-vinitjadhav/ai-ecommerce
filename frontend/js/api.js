@@ -48,14 +48,14 @@ async function apiFetch(endpoint, options = {}) {
 // AUTH FUNCTIONS
 // ============================================================
 async function registerUser(userData) {
-    return apiFetch('/auth/register', {   // ✅ CORRECT
+    return apiFetch('/auth/register', {   
         method: 'POST',
         body: JSON.stringify(userData)
     });
 }
 
 async function loginUser(credentials) {
-    return apiFetch('/auth/login', {     // ✅ CORRECT
+    return apiFetch('/auth/login', {     
         method: 'POST',
         body: JSON.stringify(credentials)
     });
@@ -68,7 +68,8 @@ async function getProducts() {
     return apiFetch('/products/');
 }
 
-async function searchProducts(keyword) {
+// FIXED: Renamed to avoid global collision
+async function apiSearchProducts(keyword) {
     return apiFetch(`/products/search/?keyword=${keyword}`);
 }
 
@@ -83,7 +84,8 @@ async function getCart(userId) {
     return apiFetch(`/cart/${userId}`);
 }
 
-async function addToCart(userId, productId, quantity = 1) {
+// FIXED: Renamed to avoid global collision
+async function apiAddToCart(userId, productId, quantity = 1) {
     return apiFetch(`/cart/${userId}`, {
         method: 'POST',
         body: JSON.stringify({ product_id: productId, quantity })
@@ -140,12 +142,43 @@ async function getAllOrders() {
     return apiFetch('/admin/orders');
 }
 
-async function updateOrderStatus(orderId, status) {
+// FIXED: Renamed to avoid global collision
+async function apiUpdateOrderStatus(orderId, status) {
     return apiFetch(`/admin/orders/${orderId}`, {
         method: 'PUT',
         body: JSON.stringify({ status })
     });
 }
 
-// Make cart functions globally accessible
-window.updateCartCount = updateCartCount;
+// ============================================================
+// TOAST NOTIFICATION SYSTEM (Modern UI Popups)
+// ============================================================
+function showToast(message, type = 'success') {
+    // Check if container exists, if not create it
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    // Create the toast element
+    const toast = document.createElement('div');
+    toast.className = `custom-toast ${type}`;
+    
+    // Add icon based on success or error
+    const icon = type === 'success' ? '✅' : '⚠️';
+    toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+    
+    // Add to screen
+    container.appendChild(toast);
+
+    // Remove it smoothly after 3 seconds
+    setTimeout(() => {
+        toast.style.animation = 'fadeOutDown 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Make it globally accessible to all files (REPLACES THE BROKEN CODE)
+window.showToast = showToast;

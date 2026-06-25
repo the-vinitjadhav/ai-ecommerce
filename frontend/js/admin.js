@@ -1,43 +1,120 @@
-// Load admin pages on load
-document.addEventListener('DOMContentLoaded', function() {
+// ============================================================
+// FILE: frontend/js/admin.js
+// PURPOSE: Unified Admin Dashboard Logic & Analytics
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', async function() {
+    // 1. SECURITY GUARD: Instantly kick out non-admins
     checkAdminAuth();
-    
-    const path = window.location.pathname;
-    
-    if (path.includes('dashboard.html')) {
-        loadDashboard();
-    } else if (path.includes('add-product.html')) {
+
+    // 2. Load the unified dashboard if we are on admin.html
+    if (window.location.pathname.includes('admin.html')) {
+        await loadDashboardStats();
+        
         const form = document.getElementById('add-product-form');
         if (form) form.addEventListener('submit', handleAddProduct);
-    } else if (path.includes('orders.html')) {
-        loadAllOrders();
     }
 });
 
-// Check if user is admin
 function checkAdminAuth() {
     const role = localStorage.getItem('role');
     if (role !== 'admin') {
-        alert('Access denied. Admin only.');
-        window.location.href = '../login.html';
+        if (typeof showToast === 'function') {
+            showToast('Access denied. Admin only.', 'error');
+        } else {
+            alert('Access denied. Admin only.');
+        }
+        setTimeout(() => window.location.href = 'index.html', 1500);
     }
 }
 
 // ============================================================
-// DASHBOARD
+// DASHBOARD ANALYTICS & ORDERS TABLE
 // ============================================================
-async function loadDashboard() {
+async function loadDashboardStats() {
     try {
-        const products = await getProducts();
-        const orders = await getAllOrders();
+        // Fetch data simultaneously for speed
+        const [orders, products] = await Promise.all([
+            getAllOrders(),
+            getProducts()
+        ]);
+
+        // Calculate Totals
+        const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
         
-        document.getElementById('product-count').textContent = products.length;
-        document.getElementById('order-count').textContent = orders.length;
-        
-        const totalRevenue = orders.reduce((sum, order) => sum + order.total_amount, 0);
-        document.getElementById('revenue').textContent = `₹${totalRevenue}`;
+        // Update DOM Elements
+        document.getElementById('total-revenue').textContent = `₹${totalRevenue.toLocaleString('en-IN')}`;
+        document.getElementById('total-orders').textContent = orders.length;
+        document.getElementById('total-products').textContent = products.length;
+
+        // Render the UI components
+        renderOrdersTable(orders);
+        renderChart(orders);
+
     } catch (error) {
+        if (typeof showToast === 'function') showToast('Error loading dashboard data', 'error');
         console.error('Error loading dashboard:', error);
+    }
+}
+
+function renderOrdersTable(orders) {
+    const tbody = document.getElementById('admin-orders-body');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+
+    if (orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">No orders found.</td></tr>';
+        return;
+    }
+
+    orders.forEach(order => {
+        // Create color-coded status badges
+        let badgeClass = 'bg-secondary';
+        if (order.status === 'delivered') badgeClass = 'bg-success';
+        if (order.status === 'shipped') badgeClass = 'bg-primary';
+        if (order.status === 'cancelled') badgeClass = 'bg-danger';
+        if (order.status === 'pending') badgeClass = 'bg-warning text-dark';
+
+        // Format Date
+        const orderDate = new Date(order.order_date).toLocaleDateString();
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>#${order.order_id}</td>
+            <td class="fw-bold">${order.name || 'Unknown'}</td>
+            <td>${orderDate}</td>
+            <td>₹${order.total_amount}</td>
+            <td><span class="badge ${badgeClass}">${order.status.toUpperCase()}</span></td>
+            <td>
+                <select class="form-select form-select-sm d-inline-block w-auto" onchange="updateStatus(${order.order_id}, this.value)">
+                    <option value="" selected disabled>Change...</option>
+                    <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>Pending</option>
+                    <option value="shipped" ${order.status === 'shipped' ? 'selected' : ''}>Shipped</option>
+                    <option value="delivered" ${order.status === 'delivered' ? 'selected' : ''}>Delivered</option>
+                    <option value="cancelled" ${order.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+                </select>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// ============================================================
+// UPDATE ORDER STATUS
+// ============================================================
+async function updateStatus(orderId, newStatus) {
+    if (!confirm(`Update order #${orderId} to "${newStatus}"?`)) {
+        loadDashboardStats(); // Resets the dropdown if they cancel
+        return;
+    }
+    
+    try {
+        await apiUpdateOrderStatus(orderId, newStatus);
+        if (typeof showToast === 'function') showToast(`Order #${orderId} marked as ${newStatus}`, 'success');
+        loadDashboardStats(); // Refresh the table and chart instantly
+    } catch (error) {
+        if (typeof showToast === 'function') showToast('Failed to update order', 'error');
     }
 }
 
@@ -45,120 +122,72 @@ async function loadDashboard() {
 // ADD PRODUCT
 // ============================================================
 async function handleAddProduct(e) {
-    e.preventDefault();
+    e.preventDefault(); // Prevent page reload
     
-    const product_name = document.getElementById('product_name').value;
-    const description = document.getElementById('description').value;
-    const price = parseFloat(document.getElementById('price').value);
-    const stock = parseInt(document.getElementById('stock').value);
-    const category_name = document.getElementById('category_name').value;
-    const image_url = document.getElementById('image_url').value || null;
-    
-    const successAlert = document.getElementById('add-alert');
-    const errorAlert = document.getElementById('add-error');
-    
-    if (successAlert) successAlert.classList.add('d-none');
-    if (errorAlert) errorAlert.classList.add('d-none');
-    
+    const productData = {
+        product_name: document.getElementById('prod-name').value,
+        price: parseFloat(document.getElementById('prod-price').value),
+        stock: parseInt(document.getElementById('prod-stock').value),
+        category_name: document.getElementById('prod-category').value,
+        image_url: document.getElementById('prod-image').value || null,
+        description: "New product added by Admin."
+    };
+
     try {
-        const result = await addProduct({
-            product_name,
-            description,
-            price,
-            stock,
-            category_name,
-            image_url
-        });
-        
-        if (successAlert) {
-            successAlert.textContent = `Product added successfully! Product ID: ${result.product_id}`;
-            successAlert.classList.remove('d-none');
-        }
-        
-        // Clear form
+        await addProduct(productData);
+        if (typeof showToast === 'function') showToast('Product added successfully!', 'success');
         document.getElementById('add-product-form').reset();
+        loadDashboardStats(); // Refresh the product count
     } catch (error) {
-        if (errorAlert) {
-            errorAlert.textContent = error.message;
-            errorAlert.classList.remove('d-none');
-        } else {
-            alert('Error adding product: ' + error.message);
-        }
+        if (typeof showToast === 'function') showToast('Error adding product', 'error');
+        console.error(error);
     }
 }
 
 // ============================================================
-// VIEW ALL ORDERS (ADMIN)
+// CHART.JS ANALYTICS
 // ============================================================
-async function loadAllOrders() {
-    const container = document.getElementById('orders-container');
-    if (!container) return;
+let salesChartInstance = null;
+
+function renderChart(orders) {
+    const canvas = document.getElementById('revenueChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     
-    try {
-        const orders = await getAllOrders();
-        
-        if (orders.length === 0) {
-            container.innerHTML = '<p class="text-muted">No orders found.</p>';
-            return;
+    // Process order data to group revenue by Status
+    const statusData = { pending: 0, shipped: 0, delivered: 0, cancelled: 0 };
+    orders.forEach(o => {
+        if (statusData[o.status] !== undefined) {
+            statusData[o.status] += parseFloat(o.total_amount);
         }
-        
-        let html = `
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Order ID</th>
-                        <th>Customer</th>
-                        <th>Total</th>
-                        <th>Status</th>
-                        <th>Date</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        
-        orders.forEach(order => {
-            const statusClass = `status-${order.status}`;
-            html += `
-                <tr>
-                    <td>#${order.order_id}</td>
-                    <td>${order.name || 'Unknown'}</td>
-                    <td>₹${order.total_amount}</td>
-                    <td><span class="order-status ${statusClass}">${order.status}</span></td>
-                    <td>${new Date(order.order_date).toLocaleDateString()}</td>
-                    <td>
-                        <select class="form-select form-select-sm" onchange="updateOrderStatus(${order.order_id}, this.value)">
-                            <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>Pending</option>
-                            <option value="confirmed" ${order.status === 'confirmed' ? 'selected' : ''}>Confirmed</option>
-                            <option value="shipped" ${order.status === 'shipped' ? 'selected' : ''}>Shipped</option>
-                            <option value="delivered" ${order.status === 'delivered' ? 'selected' : ''}>Delivered</option>
-                            <option value="cancelled" ${order.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
-                        </select>
-                    </td>
-                </tr>
-            `;
-        });
-        
-        html += `</tbody></table>`;
-        container.innerHTML = html;
-    } catch (error) {
-        container.innerHTML = `<div class="alert alert-danger">Error loading orders: ${error.message}</div>`;
+    });
+
+    // Destroy the old chart before drawing a new one to prevent overlap glitches
+    if (salesChartInstance) {
+        salesChartInstance.destroy();
     }
+
+    salesChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Pending', 'Shipped', 'Delivered', 'Cancelled'],
+            datasets: [{
+                data: [statusData.pending, statusData.shipped, statusData.delivered, statusData.cancelled],
+                backgroundColor: ['#ffc107', '#0d6efd', '#198754', '#dc3545'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right' }
+            }
+        }
+    });
 }
 
-// ============================================================
-// UPDATE ORDER STATUS
-// ============================================================
-async function updateOrderStatus(orderId, newStatus) {
-    if (!confirm(`Update order #${orderId} to "${newStatus}"?`)) {
-        return;
-    }
-    
-    try {
-        await updateOrderStatus(orderId, newStatus);
-        alert('Order status updated successfully!');
-        loadAllOrders(); // Reload the table
-    } catch (error) {
-        alert('Error updating status: ' + error.message);
-    }
+function logout() {
+    localStorage.clear();
+    window.location.href = 'index.html';
 }
