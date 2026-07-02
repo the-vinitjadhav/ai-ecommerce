@@ -134,7 +134,7 @@ def cancel_order(user_id: int, order_id: int) -> str:
     close_db_connection(conn)
     return f"Order #{order_id} cancelled successfully."
 
-@router.post("/")
+@router.post("")
 async def process_chat(request: ChatRequest):
     if not client:
         return {"response": "AI features not configured. Missing GROQ_API_KEY."}

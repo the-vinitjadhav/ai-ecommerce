@@ -53,12 +53,9 @@
             <div class="col-md-8 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-white fw-bold">Revenue Overview</div>
-                    <div class="card-body">
-                        <canvas id="revenueChart"></canvas>
-                    </div>
+                    <div class="card-body"><canvas id="revenueChart"></canvas></div>
                 </div>
             </div>
-
             <div class="col-md-4 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-white fw-bold">Add New Product</div>
@@ -88,8 +85,16 @@
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Image URL</label>
-                                <input type="url" id="prod-image" class="form-control" placeholder="https://...">
+                                <label class="form-label">Product Image</label>
+                                <div class="input-group mb-2">
+                                    <span class="input-group-text">📁 Upload</span>
+                                    <input type="file" id="prod-image-file" class="form-control" accept="image/*">
+                                </div>
+                                <div class="text-center text-muted small mb-2 fw-bold">- OR -</div>
+                                <div class="input-group">
+                                    <span class="input-group-text">🔗 URL</span>
+                                    <input type="url" id="prod-image-url" class="form-control" placeholder="https://...">
+                                </div>
                             </div>
                             <button type="submit" class="btn btn-primary w-100">Save Product</button>
                         </form>
@@ -103,23 +108,71 @@
             <div class="card-body table-responsive">
                 <table class="table table-hover align-middle">
                     <thead class="table-light">
-                        <tr>
-                            <th>Order ID</th>
-                            <th>Customer</th>
-                            <th>Date</th>
-                            <th>Amount</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
+                        <tr><th>Order ID</th><th>Customer</th><th>Date</th><th>Amount</th><th>Status</th><th>Action</th></tr>
                     </thead>
-                    <tbody id="admin-orders-body">
-                        <tr><td colspan="6" class="text-center">Loading orders...</td></tr>
-                    </tbody>
+                    <tbody id="admin-orders-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-5">
+            <div class="card-header bg-white fw-bold">Manage Products</div>
+            <div class="card-body table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr><th>#</th><th>Image</th><th>Product Name</th><th>Price</th><th>Stock</th><th>Action</th></tr>
+                    </thead>
+                    <tbody id="admin-products-body"></tbody>
                 </table>
             </div>
         </div>
     </div>
 
+    <div class="modal fade" id="editProductModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">✏️ Edit Product</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-product-form">
+                        <input type="hidden" id="edit-prod-id">
+                        <div class="mb-3">
+                            <label class="form-label">Product Name</label>
+                            <input type="text" id="edit-prod-name" class="form-control" required>
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Price (₹)</label>
+                                <input type="number" id="edit-prod-price" class="form-control" required>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Stock</label>
+                                <input type="number" id="edit-prod-stock" class="form-control" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Category</label>
+                            <select id="edit-prod-category" class="form-select">
+                                <option value="Electronics">Electronics</option>
+                                <option value="Laptops">Laptops</option>
+                                <option value="Clothing">Clothing</option>
+                                <option value="Books">Books</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Image URL</label>
+                            <input type="url" id="edit-prod-image-url" class="form-control" placeholder="https://...">
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">Save Changes</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/api.js"></script>
     <script src="js/admin.js"></script>
 </body>

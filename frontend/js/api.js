@@ -7,23 +7,28 @@
 const API_BASE = 'http://127.0.0.1:8000/api';
 
 // ============================================================
-// Generic fetch function
+// Generic fetch function (With JWT Token Injection)
 // ============================================================
 async function apiFetch(endpoint, options = {}) {
-    // Ensure method is defaulted to GET if not provided
     const method = options.method || 'GET';
-    
     const url = `${API_BASE}${endpoint}`;
-    console.log(`[API] ${method} ${url}`);
+    
+    const token = localStorage.getItem('token');
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
 
     try {
         const response = await fetch(url, {
             ...options,
-            method: method,  // Explicitly set method
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
+            method: method,
+            headers: headers
         });
         
         if (!response.ok) {
@@ -68,7 +73,6 @@ async function getProducts() {
     return apiFetch('/products/');
 }
 
-// FIXED: Renamed to avoid global collision
 async function apiSearchProducts(keyword) {
     return apiFetch(`/products/search/?keyword=${keyword}`);
 }
@@ -84,7 +88,6 @@ async function getCart(userId) {
     return apiFetch(`/cart/${userId}`);
 }
 
-// FIXED: Renamed to avoid global collision
 async function apiAddToCart(userId, productId, quantity = 1) {
     return apiFetch(`/cart/${userId}`, {
         method: 'POST',
@@ -138,11 +141,18 @@ async function addProduct(productData) {
     });
 }
 
+// ---> THIS WAS THE MISSING FUNCTION <---
+async function apiUpdateProduct(productId, productData) {
+    return apiFetch(`/admin/products/${productId}`, {
+        method: 'PUT',
+        body: JSON.stringify(productData)
+    });
+}
+
 async function getAllOrders() {
     return apiFetch('/admin/orders');
 }
 
-// FIXED: Renamed to avoid global collision
 async function apiUpdateOrderStatus(orderId, status) {
     return apiFetch(`/admin/orders/${orderId}`, {
         method: 'PUT',
@@ -150,11 +160,37 @@ async function apiUpdateOrderStatus(orderId, status) {
     });
 }
 
+async function apiDeleteProduct(productId) {
+    return apiFetch(`/admin/products/${productId}`, {
+        method: 'DELETE'
+    });
+}
+
+// Custom fetch for files because it uses FormData instead of JSON
+async function uploadImageFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = localStorage.getItem('token');
+    const headers = {};
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE}/admin/upload-image`, {
+        method: 'POST',
+        headers: headers,
+        body: formData 
+    });
+
+    if (!response.ok) throw new Error('Image upload failed');
+    return response.json();
+}
+
 // ============================================================
-// TOAST NOTIFICATION SYSTEM (Modern UI Popups)
+// TOAST NOTIFICATION SYSTEM
 // ============================================================
 function showToast(message, type = 'success') {
-    // Check if container exists, if not create it
     let container = document.getElementById('toast-container');
     if (!container) {
         container = document.createElement('div');
@@ -162,23 +198,18 @@ function showToast(message, type = 'success') {
         document.body.appendChild(container);
     }
 
-    // Create the toast element
     const toast = document.createElement('div');
     toast.className = `custom-toast ${type}`;
     
-    // Add icon based on success or error
     const icon = type === 'success' ? '✅' : '⚠️';
     toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
     
-    // Add to screen
     container.appendChild(toast);
 
-    // Remove it smoothly after 3 seconds
     setTimeout(() => {
         toast.style.animation = 'fadeOutDown 0.3s ease forwards';
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
 
-// Make it globally accessible to all files (REPLACES THE BROKEN CODE)
 window.showToast = showToast;

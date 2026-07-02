@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (!container) return;
 
     try {
-        // 2. Fetch the widget HTML from the server (Absolute path works on all pages)
+        // 2. Fetch the widget HTML from the server
         const response = await fetch('/chat-widget.html');
         if (!response.ok) throw new Error("Failed to fetch widget HTML");
         
@@ -85,6 +85,7 @@ function scrollToBottom() {
 async function sendWidgetMessage() {
     const input = document.getElementById('widget-chat-input');
     const userId = localStorage.getItem('userId');
+    const token = localStorage.getItem('token');
     const message = input?.value.trim();
     
     if (!message || !userId) return;
@@ -102,10 +103,13 @@ async function sendWidgetMessage() {
     const cartCountElement = document.getElementById('cart-count');
     const cartCount = cartCountElement ? cartCountElement.textContent : '0';
 
-    try {
-        const response = await fetch('/api/chat', {
+   try {
+        const response = await fetch('/api/chat', { // <-- Use exact relative path
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : ''
+            },
             body: JSON.stringify({
                 user_id: parseInt(userId),
                 message: message,
@@ -113,7 +117,7 @@ async function sendWidgetMessage() {
             })
         });
         
-        if (!response.ok) throw new Error('API error');
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
         const data = await response.json();
         
         if (typingIndicator) typingIndicator.style.display = 'none';
@@ -121,7 +125,7 @@ async function sendWidgetMessage() {
         
     } catch (error) {
         if (typingIndicator) typingIndicator.style.display = 'none';
-        addWidgetMessage('ai', 'Sorry, my server is currently resting. Please try again.');
+        addWidgetMessage('ai', 'Sorry, I encountered an error. Please try again.');
         console.error('Chat error:', error);
     }
 }

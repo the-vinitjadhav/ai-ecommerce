@@ -1,89 +1,92 @@
 // ============================================================
 // FILE: frontend/js/auth.js
-// PURPOSE: Login and Register logic
+// PURPOSE: Handle Login and Registration forms and redirects
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
     }
-    
-    const registerForm = document.getElementById('register-form');
+
     if (registerForm) {
         registerForm.addEventListener('submit', handleRegister);
     }
 });
 
-// ============================================================
-// LOGIN FUNCTION
-// ============================================================
 async function handleLogin(e) {
     e.preventDefault();
     
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
-    const alertDiv = document.getElementById('login-alert');
-    
-    if (alertDiv) alertDiv.classList.add('d-none');
-    
-    console.log('Attempting login with:', { email, password });
     
     try {
-        const result = await loginUser({ email, password });
+        const data = await loginUser({ email, password });
         
-        console.log('Login successful:', result);
-        
-        localStorage.setItem('userId', result.user_id);
-        localStorage.setItem('userName', result.name);
-        localStorage.setItem('role', result.role);
-        
-        alert('Login successful! Welcome ' + result.name);
-        window.location.href = 'index.html';
-        
-    } catch (error) {
-        console.error('Login error:', error);
-        if (alertDiv) {
-            alertDiv.textContent = error.message || 'Login failed. Check credentials.';
-            alertDiv.classList.remove('d-none');
+        // SECURE: Save the new JWT Token and user data
+        if (data.access_token) {
+            localStorage.setItem('token', data.access_token);
+            localStorage.setItem('userId', data.user_id);
+            localStorage.setItem('userName', data.name);
+            localStorage.setItem('role', data.role);
+            
+            if (typeof showToast === 'function') {
+                showToast(data.message || 'Login successful!', 'success');
+            }
+            
+            // THE MAGIC REDIRECT: Send admins to the dashboard!
+            setTimeout(() => {
+                if (data.role === 'admin') {
+                    window.location.href = 'admin.html';
+                } else {
+                    window.location.href = 'index.html';
+                }
+            }, 1000);
         } else {
-            alert('Login failed: ' + error.message);
+            throw new Error(data.error || 'Login failed');
+        }
+    } catch (error) {
+        if (typeof showToast === 'function') {
+            showToast(error.message, 'error');
+        } else {
+            alert(error.message);
         }
     }
 }
 
-// ============================================================
-// REGISTER FUNCTION
-// ============================================================
 async function handleRegister(e) {
     e.preventDefault();
     
     const name = document.getElementById('name').value;
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
-    const phone = document.getElementById('phone').value;
-    const address = document.getElementById('address').value;
-    const city = document.getElementById('city').value;
-    const pincode = document.getElementById('pincode').value;
-    const alertDiv = document.getElementById('register-alert');
     
-    if (alertDiv) alertDiv.classList.add('d-none');
+    // Optional fields
+    const phone = document.getElementById('phone')?.value || null;
+    const address = document.getElementById('address')?.value || null;
+    const city = document.getElementById('city')?.value || null;
+    const pincode = document.getElementById('pincode')?.value || null;
     
     try {
-        await registerUser({
-            name, email, password, phone, address, city, pincode
-        });
+        const data = await registerUser({ name, email, password, phone, address, city, pincode });
         
-        alert('Registration successful! Please login.');
-        window.location.href = 'login.html';
+        if (data.error) throw new Error(data.error);
+        
+        if (typeof showToast === 'function') {
+            showToast('Registration successful! Please login.', 'success');
+        }
+        
+        setTimeout(() => {
+            window.location.href = 'login.html';
+        }, 1500);
         
     } catch (error) {
-        console.error('Register error:', error);
-        if (alertDiv) {
-            alertDiv.textContent = error.message || 'Registration failed.';
-            alertDiv.classList.remove('d-none');
+        if (typeof showToast === 'function') {
+            showToast(error.message, 'error');
         } else {
-            alert('Registration failed: ' + error.message);
+            alert(error.message);
         }
     }
 }
