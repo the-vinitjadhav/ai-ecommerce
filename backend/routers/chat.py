@@ -38,21 +38,29 @@ def get_product_recommendation(query: str) -> str:
             break
             
     is_generic = query.lower().strip() in ["", "featured", "all", "random", "explore", "products", "recommend"]
+    
+    # NEW: Detect if the user is asking for the newest products
+    is_latest = any(word in query.lower() for word in ["latest", "new", "newest", "recent", "last"])
 
-    if price_limit and detected_category:
-        sql = "SELECT product_id, product_name, price, rating, category_name FROM products WHERE price <= %s AND category_name = %s LIMIT 5"
+    # SQL Routing Logic
+    if is_latest:
+        # Sort by product_id DESC to get the most recently added items
+        sql = "SELECT product_id, product_name, price, rating, category_name, image_url FROM products ORDER BY product_id DESC LIMIT 5"
+        params = ()
+    elif price_limit and detected_category:
+        sql = "SELECT product_id, product_name, price, rating, category_name, image_url FROM products WHERE price <= %s AND category_name = %s LIMIT 5"
         params = (price_limit, detected_category)
     elif price_limit:
-        sql = "SELECT product_id, product_name, price, rating, category_name FROM products WHERE price <= %s LIMIT 5"
+        sql = "SELECT product_id, product_name, price, rating, category_name, image_url FROM products WHERE price <= %s LIMIT 5"
         params = (price_limit,)
     elif detected_category:
-        sql = "SELECT product_id, product_name, price, rating, category_name FROM products WHERE category_name = %s LIMIT 5"
+        sql = "SELECT product_id, product_name, price, rating, category_name, image_url FROM products WHERE category_name = %s LIMIT 5"
         params = (detected_category,)
     elif is_generic:
-        sql = "SELECT product_id, product_name, price, rating, category_name FROM products ORDER BY RAND() LIMIT 4"
+        sql = "SELECT product_id, product_name, price, rating, category_name, image_url FROM products ORDER BY RAND() LIMIT 4"
         params = ()
     else:
-        sql = "SELECT product_id, product_name, price, rating, category_name FROM products WHERE product_name LIKE %s OR description LIKE %s LIMIT 5"
+        sql = "SELECT product_id, product_name, price, rating, category_name, image_url FROM products WHERE product_name LIKE %s OR description LIKE %s LIMIT 5"
         params = (f"%{query}%", f"%{query}%")
     
     try:

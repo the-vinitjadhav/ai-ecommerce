@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile - AI Store</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=4">
+    <script src="/js/widget-chat.js"></script>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top glass-nav">
+        <div class="container">
+            <a class="navbar-brand fw-bold fs-4" href="index.html">
+                <span style="color: #667eea;">✨ AI</span> Store
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="products.html">Shop</a></li>
+                    <li class="nav-item"><a class="nav-link" href="chat.html">AI Assistant</a></li>
+                    
+                    <li class="nav-item ms-2">
+                        <a class="nav-link" href="cart.html">
+                            🛒 Cart <span id="cart-count" class="badge rounded-pill bg-danger ms-1">0</span>
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item"><a class="nav-link" href="profile.html" id="profile-link" style="display:none;">👤 Profile</a></li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link text-warning fw-bold" href="admin.html" id="admin-link" style="display:none;">
+                            ⚙️ Admin
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item ms-3">
+                        <a class="btn btn-outline-light btn-sm px-4 rounded-pill" href="login.html" id="login-link">Login</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <div style="height: 80px;"></div>
+    <div class="container mt-4 mb-5">
+        <div class="row">
+            
+            <div class="col-md-4 col-lg-3 mb-4">
+                <div class="card shadow-sm border-0 profile-sidebar h-100">
+                    <div class="card-body text-center pt-5 pb-4">
+                        <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3 shadow-sm" 
+                             style="width: 100px; height: 100px; font-size: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;" 
+                             id="profile-avatar">
+                            👤
+                        </div>
+                        <h4 class="fw-bold mb-1" id="sidebar-name">Loading...</h4>
+                        <p class="text-muted small mb-4" id="sidebar-email">...</p>
+                        
+                        <div class="bg-light rounded p-3 mb-4 text-start border">
+                            <span class="text-muted small fw-bold">STORE CREDIT</span>
+                            <h3 class="mb-0 text-success">₹0.00</h3>
+                        </div>
+
+                        <div class="nav flex-column nav-pills text-start" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+                            <button class="nav-link active py-3" data-bs-toggle="pill" data-bs-target="#tab-profile" type="button">⚙️ Account Details</button>
+                            <button class="nav-link py-3" data-bs-toggle="pill" data-bs-target="#tab-orders" type="button">📦 Order History</button>
+                            <button class="nav-link py-3" data-bs-toggle="pill" data-bs-target="#tab-wishlist" type="button">❤️ My Wishlist</button>
+                            <button class="nav-link py-3 text-danger mt-3" onclick="logout()" type="button">🚪 Sign Out</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8 col-lg-9">
+                <div class="tab-content" id="v-pills-tabContent">
+                    
+                    <div class="tab-pane fade show active" id="tab-profile" role="tabpanel">
+                        <div class="card shadow-sm border-0 mb-4">
+                            <div class="card-header bg-white fw-bold py-3 fs-5 border-bottom-0 pt-4 px-4">
+                                Personal Information
+                            </div>
+                            <div class="card-body px-4 pb-4">
+                                <form id="profile-form">
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label text-muted small fw-bold">Full Name</label>
+                                            <input type="text" id="prof-name" class="form-control form-control-lg bg-light" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label text-muted small fw-bold">Email Address</label>
+                                            <input type="email" id="prof-email" class="form-control form-control-lg text-muted" disabled>
+                                        </div>
+                                    </div>
+                                    <div class="mb-4">
+                                        <label class="form-label text-muted small fw-bold">Phone Number</label>
+                                        <input type="text" id="prof-phone" class="form-control form-control-lg bg-light">
+                                    </div>
+                                    
+                                    <h5 class="fw-bold mt-5 mb-3 border-bottom pb-2">Shipping Details</h5>
+                                    <div class="mb-3">
+                                        <label class="form-label text-muted small fw-bold">Delivery Address</label>
+                                        <textarea id="prof-address" class="form-control bg-light" rows="3"></textarea>
+                                    </div>
+                                    <div class="row mb-4">
+                                        <div class="col-md-6">
+                                            <label class="form-label text-muted small fw-bold">City</label>
+                                            <input type="text" id="prof-city" class="form-control form-control-lg bg-light">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label text-muted small fw-bold">Pincode / ZIP</label>
+                                            <input type="text" id="prof-pincode" class="form-control form-control-lg bg-light">
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-lg px-5 rounded-pill shadow">Save All Changes</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="tab-orders" role="tabpanel">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white fw-bold py-3 fs-5 px-4">My Orders</div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="ps-4 py-3">Order ID</th>
+                                                <th>Date</th>
+                                                <th>Total</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="user-orders-body">
+                                            <tr><td colspan="4" class="text-center py-5 text-muted">Loading your orders...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="tab-wishlist" role="tabpanel">
+                        <div class="card shadow-sm border-0 text-center py-5">
+                            <div class="card-body">
+                                <h1 style="font-size: 60px;">❤️</h1>
+                                <h3 class="fw-bold mt-3">Your Wishlist is Empty</h3>
+                                <p class="text-muted">Save items you love here to buy them later.</p>
+                                <a href="products.html" class="btn btn-primary mt-3 px-4 rounded-pill">Explore Products</a>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ai-chat-widget-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/profile.js"></script>
+</body>
+</html>

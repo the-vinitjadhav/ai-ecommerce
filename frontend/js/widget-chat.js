@@ -44,12 +44,14 @@ function initChatWidget() {
         widget.style.display = 'block';
     }
 
-    // Add the typing indicator HTML dynamically
+    // Add the typing indicator using the NEW CSS classes
     const messagesContainer = document.getElementById('widget-chat-messages');
-    if (messagesContainer) {
+    if (messagesContainer && !document.getElementById('widget-typing-indicator')) {
         messagesContainer.innerHTML += `
-            <div id="widget-typing-indicator" style="display: none;">
-                <div class="typing-dots"><span></span><span></span><span></span></div>
+            <div id="widget-typing-indicator" class="msg-row msg-ai" style="display: none;">
+                <div class="typing-bubble">
+                    <div class="typing-dots"><span></span><span></span><span></span></div>
+                </div>
             </div>
         `;
     }
@@ -95,7 +97,7 @@ async function sendWidgetMessage() {
     
     // Show Typing Indicator
     const typingIndicator = document.getElementById('widget-typing-indicator');
-    if (typingIndicator) typingIndicator.style.display = 'block';
+    if (typingIndicator) typingIndicator.style.display = 'flex';
     scrollToBottom();
 
     // Harvest Context (Page name & Cart Count)
@@ -104,7 +106,7 @@ async function sendWidgetMessage() {
     const cartCount = cartCountElement ? cartCountElement.textContent : '0';
 
    try {
-        const response = await fetch('/api/chat', { // <-- Use exact relative path
+        const response = await fetch('/api/chat', { 
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -137,15 +139,9 @@ function addWidgetMessage(type, text) {
 
     const div = document.createElement('div');
     
-    if (type === 'user') {
-        div.style.textAlign = 'right';
-        div.style.marginBottom = '12px';
-        div.innerHTML = `<div style="display:inline-block; background:#667eea; color:white; padding:10px 15px; border-radius:18px; border-bottom-right-radius:4px; max-width:80%; text-align:left;">${text}</div>`;
-    } else if (type === 'ai') {
-        div.style.textAlign = 'left';
-        div.style.marginBottom = '12px';
-        div.innerHTML = `<div style="display:inline-block; background:white; color:#333; padding:10px 15px; border-radius:18px; border-bottom-left-radius:4px; max-width:85%; box-shadow:0 2px 5px rgba(0,0,0,0.05); border:1px solid #eee;">${text}</div>`;
-    }
+    // Use the sleek new CSS classes instead of inline styles
+    div.className = `msg-row ${type === 'user' ? 'msg-user' : 'msg-ai'}`;
+    div.innerHTML = `<div class="bubble ${type === 'user' ? 'bubble-user' : 'bubble-ai'}">${text}</div>`;
     
     // Always insert the message BEFORE the typing indicator so the dots stay at the bottom
     if (typingIndicator && typingIndicator.parentNode === container) {

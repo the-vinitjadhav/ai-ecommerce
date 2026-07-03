@@ -66,6 +66,17 @@ async function loginUser(credentials) {
     });
 }
 
+async function getUserProfile(userId) {
+    return apiFetch(`/auth/profile/${userId}`);
+}
+
+async function updateUserProfile(userId, profileData) {
+    return apiFetch(`/auth/profile/${userId}`, {
+        method: 'PUT',
+        body: JSON.stringify(profileData)
+    });
+}
+
 // ============================================================
 // PRODUCT FUNCTIONS
 // ============================================================

@@ -1,28 +1,20 @@
+<!-- frontend/chat-widget.html -->
 <div id="ai-chat-widget">
-    
-    <button id="chat-toggle">🤖</button>
+    <button id="chat-toggle" class="chat-toggle-btn"><i class="bi bi-stars"></i></button>
 
-    <div id="chat-popup">
-        
+    <div id="chat-popup" class="modern-chat-popup">
         <div class="chat-header">
-            <div>
-                <span style="font-weight:600; font-size:1.1rem;">🤖 AI Assistant</span>
-                <br><small style="opacity:0.8;">Online • Powered by Groq</small>
-            </div>
-            <button id="chat-close" style="background:none; border:none; color:white; font-size:22px; cursor:pointer;">✕</button>
+            <h6 class="mb-0 fw-bold">AI Shopping Assistant</h6>
+            <button id="chat-close" class="btn-close"></button>
         </div>
-
         <div id="widget-chat-messages">
-            <div style="text-align:center; color:#888; font-size:0.9rem; padding:20px;">
-                👋 Ask me anything about products, prices, or orders!
-            </div>
+            <div class="bubble bubble-ai">👋 Hello! How can I help you today?</div>
         </div>
-
         <div class="chat-input-container">
-            <input id="widget-chat-input" type="text" placeholder="Ask about products...">
-            <button id="widget-chat-send">Send</button>
+            <div class="chat-input-wrapper">
+                <input id="widget-chat-input" type="text" placeholder="Type a message...">
+                <button id="widget-chat-send"><i class="bi bi-send"></i></button>
+            </div>
         </div>
     </div>
 </div>
-
-<script src="js/widget-chat.js"></script>

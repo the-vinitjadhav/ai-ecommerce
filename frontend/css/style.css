@@ -1,254 +1,520 @@
-/* Simple fresher-style CSS */
+/* ==========================================================================
+   ADVANCED AI STORE DESIGN SYSTEM
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+    /* Premium Color Palette */
+    --primary: #6366f1;       /* Indigo 500 */
+    --primary-glow: rgba(99, 102, 241, 0.4);
+    --secondary: #a855f7;     /* Purple 500 */
+    --accent: #06b6d4;        /* Cyan 500 */
+    
+    /* Backgrounds & Surfaces */
+    --bg-body: #f4f4f9;       /* Ultra-soft cool gray */
+    --bg-surface: #ffffff;
+    --glass-bg: rgba(255, 255, 255, 0.75);
+    
+    /* Text Colors */
+    --text-dark: #0f172a;     /* Slate 900 */
+    --text-main: #334155;     /* Slate 700 */
+    --text-muted: #64748b;    /* Slate 500 */
+    
+    /* Advanced Shadow System */
+    --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.03);
+    --shadow-float: 0 10px 30px rgba(0, 0, 0, 0.08);
+    --shadow-hover: 0 20px 40px rgba(99, 102, 241, 0.12);
+    
+    /* Borders & Radius */
+    --radius-sm: 12px;
+    --radius-md: 20px;
+    --radius-lg: 32px;
+    --border-light: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+/* =========================================
+   1. GLOBAL & NATIVE OVERRIDES
+   ========================================= */
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+    padding-top: 100px; /* Pushes content below the fixed navbar */
 }
 
-.navbar {
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+/* Custom Scrollbar for a premium feel */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-body); }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* Custom text selection */
+::selection { background: var(--primary-glow); color: var(--text-dark); }
+
+/* =========================================
+   2. APPLE-STYLE GLASS NAVBAR
+   ========================================= */
+.glass-nav {
+    background: var(--glass-bg) !important;
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+    padding: 12px 0;
+    box-shadow: var(--shadow-soft);
 }
 
-.product-card {
-    transition: transform 0.2s;
-    border: none;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+.navbar-dark .navbar-brand { color: var(--text-dark) !important; font-weight: 800; letter-spacing: -0.5px; }
+.navbar-dark .navbar-nav .nav-link {
+    color: var(--text-muted) !important;
+    font-weight: 600;
+    padding: 8px 16px;
+    margin: 0 4px;
+    border-radius: var(--radius-sm);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.product-card:hover {
-    transform: translateY(-5px);
+.navbar-dark .navbar-nav .nav-link:hover, 
+.navbar-dark .navbar-nav .nav-link.active {
+    color: var(--primary) !important;
+    background: rgba(99, 102, 241, 0.08);
 }
 
-.product-card img {
-    height: 200px;
-    object-fit: cover;
+.glass-nav .btn-outline-light {
+    color: white !important;
+    background: linear-gradient(135deg, var(--text-dark) 0%, #334155 100%) !important;
+    border: none !important;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+.glass-nav .btn-outline-light:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.2);
 }
 
-.price {
-    color: #28a745;
-    font-weight: bold;
-    font-size: 1.2rem;
-}
-
-.stock-badge {
-    font-size: 0.8rem;
-}
-
-.cart-item img {
-    width: 80px;
-    height: 80px;
-    object-fit: cover;
-}
-
-.order-status {
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-}
-
-.status-pending { background-color: #ffc107; color: #212529; }
-.status-confirmed { background-color: #17a2b8; color: white; }
-.status-shipped { background-color: #007bff; color: white; }
-.status-delivered { background-color: #28a745; color: white; }
-.status-cancelled { background-color: #dc3545; color: white; }
-
-.admin-sidebar {
-    min-height: 100vh;
-    background-color: #343a40;
-    color: white;
-}
-
-.admin-sidebar a {
-    color: #adb5bd;
-    text-decoration: none;
-    padding: 10px 20px;
-    display: block;
-}
-
-.admin-sidebar a:hover {
-    color: white;
-    background-color: #495057;
-}
-
-.admin-sidebar .active {
-    color: white;
-    background-color: #007bff;
-}
-
-.alert {
-    margin-top: 10px;
-}
-
-/* Modern UI Styles */
-.product-card {
-    transition: transform 0.3s, box-shadow 0.3s;
-    border: none;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-    border-radius: 15px;
+/* =========================================
+   3. MESH GRADIENT HERO SECTION
+   ========================================= */
+.hero-section {
+    background-color: #ffffff;
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.15) 0px, transparent 50%);
+    color: var(--text-dark);
+    padding: 100px 40px;
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: var(--shadow-float);
+    position: relative;
     overflow: hidden;
 }
 
+.hero-section h1 {
+    font-size: 4.5rem;
+    font-weight: 800;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 20px;
+}
+
+.hero-section .btn-light {
+    background: var(--text-dark);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 12px 30px;
+    font-weight: 700;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+.hero-section .btn-outline-light {
+    color: var(--primary);
+    border: 2px solid var(--primary);
+    background: transparent;
+    border-radius: 50px;
+    padding: 10px 30px;
+    font-weight: 700;
+}
+
+/* =========================================
+   4. FLOATING PRODUCT CARDS
+   ========================================= */
+.product-card {
+    background: var(--bg-surface);
+    border: var(--border-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-soft);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    overflow: hidden;
+    height: 100%;
+}
+
 .product-card:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    transform: translateY(-10px);
+    box-shadow: var(--shadow-hover);
+    border-color: rgba(99, 102, 241, 0.2);
 }
 
 .product-card img {
-    height: 250px;
-    object-fit: cover;
+    height: 240px;
     width: 100%;
+    object-fit: contain;
+    padding: 30px;
+    background: #ffffff;
+    border-bottom: var(--border-light);
+    transition: transform 0.5s ease;
 }
 
-.card-img-top {
-    height: 250px;
-    object-fit: cover;
-}
+.product-card:hover img { transform: scale(1.08); }
 
 .price {
-    color: #667eea;
-    font-weight: 700;
-    font-size: 1.3rem;
+    color: var(--text-dark);
+    font-weight: 800;
+    font-size: 1.6rem;
+    letter-spacing: -0.5px;
 }
 
-.btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.card-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 48px; 
+    line-height: 1.4;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+/* =========================================
+   5. ADVANCED BUTTONS & INPUTS
+   ========================================= */
+.btn-primary, .btn-success {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     border: none;
-    border-radius: 25px;
+    border-radius: 50px;
+    padding: 10px 24px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    box-shadow: 0 6px 15px var(--primary-glow);
+    transition: all 0.3s ease;
+    color: white !important;
+}
+
+.btn-primary:hover, .btn-success:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px var(--primary-glow);
+}
+
+.form-control, .form-select {
+    border: 2px solid #e2e8f0;
+    border-radius: var(--radius-sm);
+    padding: 14px 18px;
+    font-weight: 500;
+    background-color: #f8fafc;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: var(--bg-surface);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px var(--primary-glow);
+    outline: none;
+}
+
+/* =========================================
+   6. ADMIN DASHBOARD & PROFILE
+   ========================================= */
+.card {
+    border-radius: var(--radius-md);
+    border: var(--border-light);
+    box-shadow: var(--shadow-soft);
+}
+
+.table { border-collapse: separate; border-spacing: 0 8px; }
+.table th { border: none; color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
+.table td { background: var(--bg-surface); padding: 16px; vertical-align: middle; border-top: var(--border-light); border-bottom: var(--border-light); }
+.table tr td:first-child { border-left: var(--border-light); border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.table tr td:last-child { border-right: var(--border-light); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.table-hover tbody tr:hover td { background: #f8fafc; transform: scale(1.01); transition: all 0.2s; }
+
+/* Profile Sidebar Overrides */
+.profile-sidebar .nav-pills .nav-link {
+    color: var(--text-main);
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    padding: 12px 20px;
+    transition: all 0.3s ease;
+}
+.profile-sidebar .nav-pills .nav-link.active {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    box-shadow: 0 4px 15px var(--primary-glow);
+}
+
+/* Auth Cards Override */
+.card-header.bg-primary, .card-header.bg-success {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%) !important;
+    border-bottom: none;
+    padding: 20px;
+    border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+}
+
+/* =========================================
+   7. CHAT UI ENHANCEMENTS
+   ========================================= */
+.chat-container {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-float);
+    border: 1px solid rgba(255,255,255,0.5);
+}
+
+.message.user .bubble {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    box-shadow: 0 4px 10px var(--primary-glow);
+}
+
+.message.ai .bubble {
+    background: var(--bg-surface);
+    border: var(--border-light);
+    box-shadow: var(--shadow-soft);
+}
+
+/* =========================================
+   8. MODERN LAYOUT (Structural Overrides)
+   ========================================= */
+
+body.modern-layout {
+    padding-top: 0;
+    background-color: #f8fafc;
+}
+
+/* --- Floating Dock Navigation --- */
+.dock-container {
+    position: fixed;
+    top: 20px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    z-index: 1050;
+    pointer-events: none;
+}
+
+.floating-dock {
+    pointer-events: auto;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    border-radius: 50px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 30px;
+}
+
+.dock-logo { padding: 0 15px; }
+
+.dock-links {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 5px;
+    background: rgba(241, 245, 249, 0.8);
+    padding: 5px;
+    border-radius: 40px;
+}
+
+.dock-links a {
+    text-decoration: none;
+    color: var(--text-muted);
+    font-weight: 600;
     padding: 8px 20px;
+    border-radius: 30px;
+    transition: all 0.3s ease;
+}
+
+.dock-links a.active, .dock-links a:hover {
+    background: white;
+    color: var(--text-dark);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.dock-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding-right: 10px;
+}
+
+.dock-icon {
+    text-decoration: none;
+    font-size: 1.2rem;
+    position: relative;
     transition: transform 0.2s;
 }
 
-.btn-primary:hover {
-    transform: scale(1.05);
-}
+.dock-icon:hover { transform: scale(1.1); }
 
-.navbar-brand {
-    font-weight: 700;
-    font-size: 1.4rem;
-}
-
-.hero-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.cart-badge {
+    position: absolute;
+    top: -8px;
+    right: -10px;
+    background: var(--accent);
     color: white;
-    padding: 60px 0;
-    border-radius: 20px;
-    margin-top: 20px;
-}
-
-.hero-section h1 {
-    font-size: 3rem;
-    font-weight: 700;
-}
-
-.hero-section .lead {
-    font-size: 1.2rem;
-    opacity: 0.9;
-}
-/* =========================================
-   AI PRODUCT CARD (Chat & Widget Styles)
-   ========================================= */
-.ai-product-card {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 18px;
-    margin-top: 15px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    max-width: 320px; 
-}
-
-.ai-product-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-    border-color: #cbd5e1;
-}
-
-.ai-card-title {
-    margin: 0 0 8px 0;
-    color: #1e293b;
-    font-size: 1.1rem;
-    font-weight: 700;
-    line-height: 1.3;
-}
-
-.ai-card-price {
-    color: #059669; /* Emerald green for price */
-    font-weight: 800;
-    font-size: 1.3rem;
-    margin-bottom: 15px;
-    display: inline-block;
-}
-
-.ai-card-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #ffffff;
-    border: none;
-    padding: 12px 15px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.95rem;
-    font-weight: 600;
-    width: 100%;
-    box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
-    transition: all 0.2s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.ai-card-btn:hover {
-    background: linear-gradient(135deg, #5a6fd6 0%, #68428f 100%);
-    box-shadow: 0 6px 15px rgba(102, 126, 234, 0.4);
-    transform: translateY(-2px);
-}
-
-.ai-card-btn:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 5px rgba(102, 126, 234, 0.3);
-}
-
-/* =========================================
-   TOAST NOTIFICATIONS
-   ========================================= */
-#toast-container {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10000;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    pointer-events: none; /* Lets users click through the container */
-}
-
-.custom-toast {
-    color: white;
-    padding: 12px 24px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 2px 6px;
     border-radius: 50px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+.dock-btn {
+    background: var(--text-dark);
+    color: white;
+    text-decoration: none;
+    padding: 8px 24px;
+    border-radius: 30px;
     font-weight: 600;
-    font-size: 0.95rem;
+    transition: all 0.3s ease;
+}
+
+.dock-btn:hover {
+    background: var(--primary);
+    color: white;
+}
+
+/* --- Split Screen Hero --- */
+.hero-split {
+    padding-top: 140px;
+    padding-bottom: 60px;
+}
+
+.gradient-text {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.badge-pill {
+    display: inline-block;
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--primary);
+    padding: 6px 16px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+/* Overriding global btn-outline-dark for the hero */
+.btn-outline-dark {
+    border: 2px solid var(--text-dark);
+    color: var(--text-dark);
+    font-weight: 600;
+}
+.btn-outline-dark:hover {
+    background: var(--text-dark);
+    color: white;
+}
+
+/* =========================================
+   9. ANIMATED AI CORE GRAPHIC
+   ========================================= */
+.ai-core-container {
+    position: relative;
+    height: 500px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    animation: slideUpFade 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-    opacity: 0;
+    justify-content: center;
 }
 
-.custom-toast.success {
-    background: linear-gradient(135deg, #059669 0%, #10b981 100%); /* Emerald Green */
+.ai-core {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.custom-toast.error {
-    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); /* Ruby Red */
+.core-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    box-sizing: border-box;
 }
 
-@keyframes slideUpFade {
-    from { transform: translateY(30px) scale(0.9); opacity: 0; }
-    to { transform: translateY(0) scale(1); opacity: 1; }
+.ring-1 {
+    width: 100%;
+    height: 100%;
+    border-top: 3px solid var(--primary);
+    border-right: 3px solid var(--primary);
+    animation: spin 8s linear infinite;
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.2);
 }
 
-@keyframes fadeOutDown {
-    from { transform: translateY(0) scale(1); opacity: 1; }
-    to { transform: translateY(20px) scale(0.9); opacity: 0; }
+.ring-2 {
+    width: 75%;
+    height: 75%;
+    border-bottom: 3px solid var(--secondary);
+    border-left: 3px solid var(--secondary);
+    animation: spin 5s linear infinite reverse;
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+}
+
+.ring-3 {
+    width: 50%;
+    height: 50%;
+    border-top: 3px solid var(--accent);
+    animation: spin 3s linear infinite;
+}
+
+.core-center {
+    width: 30%;
+    height: 30%;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 3rem;
+    box-shadow: 0 0 50px rgba(99, 102, 241, 0.6);
+    animation: pulse 2s ease-in-out infinite;
+    z-index: 10;
+}
+
+.floating-badge {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    padding: 12px 24px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-dark);
+    box-shadow: var(--shadow-md);
+    border: 1px solid rgba(255,255,255,0.6);
+    z-index: 20;
+}
+
+.badge-1 { top: 15%; right: -5%; animation: float 4s ease-in-out infinite; }
+.badge-2 { bottom: 15%; left: -5%; animation: float 5s ease-in-out infinite reverse; }
+
+/* Custom Keyframe Animations */
+@keyframes spin { 
+    100% { transform: rotate(360deg); } 
+}
+@keyframes pulse { 
+    0%, 100% { transform: scale(1); box-shadow: 0 0 50px rgba(99, 102, 241, 0.6); }
+    50% { transform: scale(1.1); box-shadow: 0 0 80px rgba(6, 182, 212, 0.8); }
+}
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-15px); }
 }

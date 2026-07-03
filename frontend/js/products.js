@@ -1,3 +1,7 @@
+// ============================================================
+// FILE: frontend/js/products.js
+// ============================================================
+
 // Load products on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadProducts();
@@ -30,25 +34,28 @@ function displayProducts(products) {
     products.forEach(product => {
         const card = `
             <div class="col-md-4 mb-4">
-                <div class="card product-card h-100">
+                <div class="card product-card h-100 shadow-sm">
                     <a href="product.html?id=${product.product_id}">
                         <img src="${product.image_url || 'images/placeholder.jpg'}" 
                              class="card-img-top" alt="${product.product_name}"
+                             style="height: 200px; object-fit: contain; padding: 1rem;"
                              onerror="this.onerror=null; this.src='https://via.placeholder.com/300x250?text=No+Image';">
                     </a>
-                    <div class="card-body">
+                    
+                    <div class="card-body d-flex flex-column">
                         <a href="product.html?id=${product.product_id}" style="text-decoration: none; color: inherit;">
-                            <h5 class="card-title">${product.product_name}</h5>
+                            <h5 class="card-title fw-bold">${product.product_name}</h5>
                         </a>
-                        <p class="card-text text-muted">${product.description || ''}</p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="price">₹${product.price}</span>
-                            <span class="stock-badge badge ${product.stock > 0 ? 'bg-success' : 'bg-danger'}">
-                                ${product.stock > 0 ? 'In Stock' : 'Out of Stock'}
-                            </span>
-                        </div>
-                        <div class="mt-2">
-                            <button class="btn btn-primary btn-sm w-100" onclick="handleUserCartClick(${product.product_id})">
+                        <p class="card-text text-muted small">${product.description || ''}</p>
+                        
+                        <div class="mt-auto">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="price fs-5 text-primary fw-bold">₹${product.price}</span>
+                                <span class="stock-badge badge ${product.stock > 0 ? 'bg-success' : 'bg-danger'}">
+                                    ${product.stock > 0 ? 'In Stock' : 'Out of Stock'}
+                                </span>
+                            </div>
+                            <button class="btn btn-primary w-100" style="background-color: #667eea; border: none;" onclick="handleUserCartClick(${product.product_id})">
                               Add to Cart
                             </button>
                         </div>
@@ -69,7 +76,6 @@ async function searchProducts() {
     }
     
     try {
-        // FIXED: Call the renamed apiSearchProducts to prevent infinite loop
         const products = await apiSearchProducts(keyword);
         displayProducts(products);
     } catch (error) {
@@ -81,13 +87,12 @@ async function searchProducts() {
 async function handleUserCartClick(productId) {
     const userId = localStorage.getItem('userId');
     if (!userId) {
-        showToast('Please login first!', 'error'); // NEW TOAST UI
-        setTimeout(() => window.location.href = 'login.html', 1500); // Redirect after 1.5s
+        showToast('Please login first!', 'error'); 
+        setTimeout(() => window.location.href = 'login.html', 1500); 
         return;
     }
     
     try {
-        // Bypass api.js entirely and do the CRUD request right here
         const response = await fetch(`http://127.0.0.1:8000/api/cart/${userId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -96,16 +101,15 @@ async function handleUserCartClick(productId) {
 
         if (!response.ok) throw new Error("Backend CRUD failed");
 
-        showToast('Product added to cart!', 'success'); // NEW TOAST UI
+        showToast('Product added to cart!', 'success'); 
 
-        // Update the count safely without relying on external files
         const cartResponse = await fetch(`http://127.0.0.1:8000/api/cart/${userId}`);
         const cartItems = await cartResponse.json();
         const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
         document.getElementById('cart-count').textContent = totalItems;
 
     } catch (error) {
-        showToast('Error: ' + error.message, 'error'); // NEW TOAST UI
+        showToast('Error: ' + error.message, 'error'); 
     }
 }
 
@@ -127,11 +131,13 @@ async function updateCartCount() {
 }
 
 // Check authentication
+// Check authentication
 function checkAuth() {
     const userId = localStorage.getItem('userId');
     const role = localStorage.getItem('role');
     const loginLink = document.getElementById('login-link');
     const adminLink = document.getElementById('admin-link');
+    const profileLink = document.getElementById('profile-link'); // Grab our new profile link
     
     if (userId) {
         if (loginLink) {
@@ -142,6 +148,13 @@ function checkAuth() {
                 logout();
             };
         }
+        
+        // Show the Profile button to logged-in users
+        if (profileLink) {
+            profileLink.style.display = 'block';
+        }
+        
+        // Show the Admin button only to administrators
         if (adminLink && role === 'admin') {
             adminLink.style.display = 'block';
         }
