@@ -2,6 +2,7 @@ from fastapi import APIRouter
 import os
 import json
 import re
+import urllib.parse
 from groq import Groq
 from backend.database import get_db_connection, close_db_connection
 from backend.models import ChatRequest
@@ -77,9 +78,13 @@ def get_product_recommendation(query: str) -> str:
             p['price'] = float(p['price'])
         if 'rating' in p and p['rating'] is not None:
             p['rating'] = float(p['rating'])
-        # Fallback image if the product doesn't have one in the database
-        if not p.get('image_url'):
-            p['image_url'] = "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=200"
+            
+        # CLOUD IMAGE FIX: If the image is missing or is a local path (doesn't start with http),
+        # generate a unique, colorful avatar with the product's name just like the cart!
+        img_url = p.get('image_url', '')
+        if not img_url or not str(img_url).startswith('http'):
+            safe_name = urllib.parse.quote(p.get('product_name', 'Product'))
+            p['image_url'] = f"https://ui-avatars.com/api/?name={safe_name}&background=random&color=fff&size=200&bold=true"
             
     return json.dumps(products)
 
@@ -155,16 +160,18 @@ async def process_chat(request: ChatRequest):
         USER CONTEXT: Looking at page: {current_page} | Items in cart: {cart_count}.
         
         RICH UI CAPABILITY:
-        When recommending products, you MUST format EACH product using this exact HTML template with a flexbox layout:
+        When recommending products, you MUST format EACH product using this exact HTML template.
+        CRITICAL: Replace the bracketed placeholders (like [image_url], [product_name], [price]) with the ACTUAL data returned by the get_product_recommendation tool! Do not leave the brackets in the final response.
+        
         <div class="ai-product-card">
-            <img src="[image_url]" class="ai-product-img" alt="[Product Name]">
+            <img src="[image_url]" class="ai-product-img" alt="[product_name]" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=Item&background=random&color=fff&size=200&bold=true';">
             
             <div class="ai-product-details">
-                <a href="product.html?id=[Product ID]" style="text-decoration: none; color: inherit;">
-                    <h6 class="ai-card-title">[Product Name]</h6>
+                <a href="product.html?id=[product_id]" style="text-decoration: none; color: inherit;">
+                    <h6 class="ai-card-title hover-underline">[product_name]</h6>
                 </a>
-                <div class="ai-card-price">₹[Price]</div>
-                <button class="ai-card-btn" onclick="apiAddToCart({request.user_id}, [Product ID]).then(() => {{ showToast('Added to Cart!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }}).catch(e => showToast(e.message || 'Error', 'error'))">
+                <div class="ai-card-price">₹[price]</div>
+                <button class="ai-card-btn" onclick="apiAddToCart({request.user_id}, [product_id]).then(() => {{ showToast('Added to Cart!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }}).catch(e => showToast(e.message || 'Error', 'error'))">
                     Add to Cart
                 </button>
             </div>
