@@ -4,7 +4,7 @@
 // ============================================================
 
 // API base URL
-const API_BASE = 'http://127.0.0.1:8000/api';
+const API_BASE = 'https://ai-ecommerce-backend-barh.onrender.com/api';
 
 // ============================================================
 // Generic fetch function (With JWT Token Injection)
