@@ -6,3 +6,5 @@ groq
 pydantic
 pydantic-core
 pyjwt
+bcrypt
+pydantic-core
