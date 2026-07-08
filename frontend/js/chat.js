@@ -34,7 +34,7 @@ async function sendMessage() {
     document.getElementById('typing-indicator').style.display = 'block';
     
     try {
-        const API_URL = "https://your-backend-app-name.onrender.com"; 
+        const API_URL = "https://ai-ecommerce-backend-barh.onrender.com"; 
 
         const response = await fetch(`${API_URL}/api/chat`, {
             method: 'POST',

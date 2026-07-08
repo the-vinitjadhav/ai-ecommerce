@@ -105,8 +105,12 @@ async function sendWidgetMessage() {
     const cartCountElement = document.getElementById('cart-count');
     const cartCount = cartCountElement ? cartCountElement.textContent : '0';
 
-   try {
-        const response = await fetch('/api/chat', { 
+  try {
+        // 1. Define your live Render Backend URL here:
+        const BACKEND_URL = "https://ai-ecommerce-backend-barh.onrender.com"; 
+
+        // 2. Attach it to the fetch request!
+        const response = await fetch(`${BACKEND_URL}/api/chat`, { 
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',

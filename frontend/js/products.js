@@ -93,7 +93,9 @@ async function handleUserCartClick(productId) {
     }
     
     try {
-        const response = await fetch(`http://127.0.0.1:8000/api/cart/${userId}`, {
+        const BACKEND_URL = "https://ai-ecommerce-backend-barh.onrender.com"; 
+
+        const response = await fetch(`${BACKEND_URL}/api/cart/${userId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ product_id: productId, quantity: 1 })
