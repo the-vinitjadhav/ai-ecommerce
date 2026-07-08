@@ -8,3 +8,4 @@ pydantic-core
 pyjwt
 bcrypt
 pydantic-core
+python-multipart
