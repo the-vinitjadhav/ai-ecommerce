@@ -87,7 +87,7 @@ async function updateUserProfile(userId, profileData) {
 // ============================================================
 async function getProducts() {
     // Removed trailing slash to prevent CORS redirect bugs
-    return apiFetch('/products');
+    return apiFetch('/products/');
 }
 
 async function apiSearchProducts(keyword) {
