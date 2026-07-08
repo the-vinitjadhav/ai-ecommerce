@@ -24,71 +24,7 @@ async function loadCartAndUpdate() {
 }
 
 // Display cart items with Cloud Image Validation & Premium UI
-function displayCart(items) {
-    const emptyCart = document.getElementById('empty-cart');
-    const cartItems = document.getElementById('cart-items');
-    const cartItemsList = document.getElementById('cart-items-list');
-    const cartTotal = document.getElementById('cart-total');
-    
-    if (!items || items.length === 0) {
-        emptyCart.style.display = 'block';
-        cartItems.style.display = 'none';
-        return;
-    }
-    
-    emptyCart.style.display = 'none';
-    cartItems.style.display = 'block';
-    
-    let total = 0;
-    let html = '';
-    
-    items.forEach(item => {
-        total += item.total_price;
-        
-        // 1. CLOUD URL VALIDATOR: 
-        // If it's a local database path (doesn't start with http), use a placeholder instantly.
-        const validImgSrc = (item.image_url && item.image_url.startsWith('http')) 
-            ? item.image_url 
-            : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=200';
-
-        // 2. PREMIUM UI: Perfect square image, truncated long text, and pill buttons.
-        html += `
-            <div class="card mb-3 border-0 shadow-sm cart-item" style="border-radius: 16px; transition: transform 0.2s;">
-                <div class="row g-0 align-items-center p-3">
-                    
-                    <div class="col-3 col-md-2 text-center">
-                        <img src="${validImgSrc}" 
-                             alt="${item.product_name}"
-                             style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; background: #f8fafc; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                    </div>
-                    
-                    <div class="col-6 col-md-8 px-3">
-                        <div class="card-body p-0">
-                            <h6 class="card-title fw-bold text-dark mb-1" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3;">
-                                ${item.product_name}
-                            </h6>
-                            <p class="card-text text-muted mb-0">
-                                <span class="fw-bold text-primary">₹${item.price}</span> 
-                                <span class="mx-2 text-muted">×</span> 
-                                <span class="fw-bold">${item.quantity}</span>
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <div class="col-3 col-md-2 text-end">
-                        <button class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm" onclick="removeItem(${item.product_id})">
-                            Remove
-                        </button>
-                    </div>
-                    
-                </div>
-            </div>
-        `;
-    });
-    
-    cartItemsList.innerHTML = html;
-    cartTotal.textContent = `₹${total}`;
-}
+displayCart(items)
 
 // Update cart count
 async function updateCartCount() {
