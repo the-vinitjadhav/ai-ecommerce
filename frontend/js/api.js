@@ -3,7 +3,7 @@
 // PURPOSE: All API calls to the backend
 // ============================================================
 
-// API base URL
+// API base URL - Your Live Render Backend
 const API_BASE = 'https://ai-ecommerce-backend-barh.onrender.com/api';
 
 // ============================================================
@@ -36,6 +36,11 @@ async function apiFetch(endpoint, options = {}) {
             try {
                 const errorData = await response.json();
                 errorMessage = errorData.detail || errorData.error || errorMessage;
+                
+                // Catch 422 Validation errors and show exactly which field is missing
+                if (response.status === 422 && Array.isArray(errorMessage)) {
+                    errorMessage = "Invalid Data: " + errorMessage[0].loc.join(" -> ");
+                }
             } catch (e) {
                 errorMessage = response.statusText || errorMessage;
             }
@@ -81,7 +86,8 @@ async function updateUserProfile(userId, profileData) {
 // PRODUCT FUNCTIONS
 // ============================================================
 async function getProducts() {
-    return apiFetch('/products/');
+    // Removed trailing slash to prevent CORS redirect bugs
+    return apiFetch('/products');
 }
 
 async function apiSearchProducts(keyword) {
@@ -152,7 +158,6 @@ async function addProduct(productData) {
     });
 }
 
-// ---> THIS WAS THE MISSING FUNCTION <---
 async function apiUpdateProduct(productId, productData) {
     return apiFetch(`/admin/products/${productId}`, {
         method: 'PUT',
