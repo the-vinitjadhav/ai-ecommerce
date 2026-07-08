@@ -1,5 +1,5 @@
 // ============================================================
-// FILE: frontend/js/cart.js (FIXED - No Double API Calls)
+// FILE: frontend/js/cart.js (CLOUD & UI FIXED)
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -23,7 +23,7 @@ async function loadCartAndUpdate() {
     }
 }
 
-// Display cart items
+// Display cart items with Cloud Image Validation & Premium UI
 function displayCart(items) {
     const emptyCart = document.getElementById('empty-cart');
     const cartItems = document.getElementById('cart-items');
@@ -44,27 +44,43 @@ function displayCart(items) {
     
     items.forEach(item => {
         total += item.total_price;
-        // FIXED: Added onerror image fallback
+        
+        // 1. CLOUD URL VALIDATOR: 
+        // If it's a local database path (doesn't start with http), use a placeholder instantly.
+        const validImgSrc = (item.image_url && item.image_url.startsWith('http')) 
+            ? item.image_url 
+            : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=200';
+
+        // 2. PREMIUM UI: Perfect square image, truncated long text, and pill buttons.
         html += `
-            <div class="card mb-3 cart-item">
-                <div class="row g-0">
-                    <div class="col-md-2">
-                        <img src="${item.image_url || 'images/placeholder.jpg'}" 
-                             class="img-fluid rounded-start" 
+            <div class="card mb-3 border-0 shadow-sm cart-item" style="border-radius: 16px; transition: transform 0.2s;">
+                <div class="row g-0 align-items-center p-3">
+                    
+                    <div class="col-3 col-md-2 text-center">
+                        <img src="${validImgSrc}" 
                              alt="${item.product_name}"
-                             onerror="this.onerror=null; this.src='https://via.placeholder.com/80?text=No+Image';">
+                             style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; background: #f8fafc; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
                     </div>
-                    <div class="col-md-8">
-                        <div class="card-body">
-                            <h5 class="card-title">${item.product_name}</h5>
-                            <p class="card-text">₹${item.price} × ${item.quantity}</p>
+                    
+                    <div class="col-6 col-md-8 px-3">
+                        <div class="card-body p-0">
+                            <h6 class="card-title fw-bold text-dark mb-1" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3;">
+                                ${item.product_name}
+                            </h6>
+                            <p class="card-text text-muted mb-0">
+                                <span class="fw-bold text-primary">₹${item.price}</span> 
+                                <span class="mx-2 text-muted">×</span> 
+                                <span class="fw-bold">${item.quantity}</span>
+                            </p>
                         </div>
                     </div>
-                    <div class="col-md-2 d-flex align-items-center">
-                        <button class="btn btn-danger btn-sm" onclick="removeItem(${item.product_id})">
+                    
+                    <div class="col-3 col-md-2 text-end">
+                        <button class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm" onclick="removeItem(${item.product_id})">
                             Remove
                         </button>
                     </div>
+                    
                 </div>
             </div>
         `;
@@ -74,7 +90,7 @@ function displayCart(items) {
     cartTotal.textContent = `₹${total}`;
 }
 
-// Update cart count (Safe version)
+// Update cart count
 async function updateCartCount() {
     const userId = localStorage.getItem('userId');
     const cartCount = document.getElementById('cart-count');
@@ -135,6 +151,8 @@ function checkAuth() {
         loginLink.href = '#';
         loginLink.onclick = function(e) {
             e.preventDefault();
+            // FIXED: Removed the JWT token to actually secure the logout
+            localStorage.removeItem('token'); 
             localStorage.removeItem('userId');
             localStorage.removeItem('userName');
             localStorage.removeItem('role');
