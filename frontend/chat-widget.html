@@ -1,19 +1,32 @@
-<!-- frontend/chat-widget.html -->
 <div id="ai-chat-widget">
-    <button id="chat-toggle" class="chat-toggle-btn"><i class="bi bi-stars"></i></button>
+    
+    <button id="chat-toggle" class="chat-toggle-btn">
+        <i class="bi bi-stars"></i>
+    </button>
 
     <div id="chat-popup" class="modern-chat-popup">
+        
         <div class="chat-header">
-            <h6 class="mb-0 fw-bold">AI Shopping Assistant</h6>
-            <button id="chat-close" class="btn-close"></button>
+            <div class="chat-header-info">
+                <div class="chat-avatar">✨</div>
+                <div>
+                    <h6>AI Store Assistant</h6>
+                    <small>● Live Guide</small>
+                </div>
+            </div>
+            <button id="chat-close" class="chat-close-btn"><i class="bi bi-x-lg"></i></button>
         </div>
+
         <div id="widget-chat-messages">
-            <div class="bubble bubble-ai">👋 Hello! How can I help you today?</div>
+            <div class="chat-welcome-msg">
+                👋 Hello! I am your conversational shopping guide. Ask me to find products, verify prices, check your orders, or list the newest inventory additions!
+            </div>
         </div>
+
         <div class="chat-input-container">
             <div class="chat-input-wrapper">
-                <input id="widget-chat-input" type="text" placeholder="Type a message...">
-                <button id="widget-chat-send"><i class="bi bi-send"></i></button>
+                <input id="widget-chat-input" type="text" placeholder="Type an inquiry here...">
+                <button id="widget-chat-send" class="chat-send-btn"><i class="bi bi-send-fill"></i></button>
             </div>
         </div>
     </div>

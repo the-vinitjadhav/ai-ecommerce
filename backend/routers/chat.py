@@ -39,12 +39,10 @@ def get_product_recommendation(query: str) -> str:
             
     is_generic = query.lower().strip() in ["", "featured", "all", "random", "explore", "products", "recommend"]
     
-    # NEW: Detect if the user is asking for the newest products
     is_latest = any(word in query.lower() for word in ["latest", "new", "newest", "recent", "last"])
 
     # SQL Routing Logic
     if is_latest:
-        # Sort by product_id DESC to get the most recently added items
         sql = "SELECT product_id, product_name, price, rating, category_name, image_url FROM products ORDER BY product_id DESC LIMIT 5"
         params = ()
     elif price_limit and detected_category:
@@ -79,6 +77,9 @@ def get_product_recommendation(query: str) -> str:
             p['price'] = float(p['price'])
         if 'rating' in p and p['rating'] is not None:
             p['rating'] = float(p['rating'])
+        # Fallback image if the product doesn't have one in the database
+        if not p.get('image_url'):
+            p['image_url'] = "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=200"
             
     return json.dumps(products)
 
@@ -154,15 +155,19 @@ async def process_chat(request: ChatRequest):
         USER CONTEXT: Looking at page: {current_page} | Items in cart: {cart_count}.
         
         RICH UI CAPABILITY:
-        When recommending products, you MUST format EACH product using this exact HTML template:
+        When recommending products, you MUST format EACH product using this exact HTML template with a flexbox layout:
         <div class="ai-product-card">
-            <a href="product.html?id=[Product ID]" style="text-decoration: none; color: inherit;">
-                <h6 class="ai-card-title hover-underline">[Product Name]</h6>
-            </a>
-            <div class="ai-card-price">₹[Price]</div>
-            <button class="ai-card-btn" onclick="apiAddToCart({request.user_id}, [Product ID]).then(() => {{ showToast('Added to Cart!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }}).catch(e => showToast(e.message || 'Error', 'error'))">
-                Add to Cart
-            </button>
+            <img src="[image_url]" class="ai-product-img" alt="[Product Name]">
+            
+            <div class="ai-product-details">
+                <a href="product.html?id=[Product ID]" style="text-decoration: none; color: inherit;">
+                    <h6 class="ai-card-title">[Product Name]</h6>
+                </a>
+                <div class="ai-card-price">₹[Price]</div>
+                <button class="ai-card-btn" onclick="apiAddToCart({request.user_id}, [Product ID]).then(() => {{ showToast('Added to Cart!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }}).catch(e => showToast(e.message || 'Error', 'error'))">
+                    Add to Cart
+                </button>
+            </div>
         </div>
         
         GENERAL EXPLORATION:
