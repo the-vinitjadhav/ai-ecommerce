@@ -1,62 +1,67 @@
 // ============================================================
 // FILE: frontend/js/widget-chat.js
-// PURPOSE: Floating AI Chat Widget with Global Injection
+// PURPOSE: Self-Contained Floating AI Chat Widget with Custom Image Fix
 // ============================================================
 
-document.addEventListener('DOMContentLoaded', async function() {
-    // 1. Find the empty container on the current page
+document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('ai-chat-widget-container');
     if (!container) return;
 
-    try {
-        // 2. Fetch the widget HTML from the server
-        const response = await fetch('/chat-widget.html');
-        if (!response.ok) throw new Error("Failed to fetch widget HTML");
-        
-        const html = await response.text();
-        
-        // 3. Inject the HTML into the page safely
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        
-        // Extract just the widget part (ignores duplicate script tags)
-        const widgetNode = tempDiv.querySelector('#ai-chat-widget');
-        if (widgetNode) {
-            container.appendChild(widgetNode);
-            // 4. Initialize the logic now that the HTML is on the screen!
-            initChatWidget();
-        }
-        
-    } catch (error) {
-        console.error('Error loading chat widget:', error);
-    }
+    // We use a custom avatar image, with a robust fallback if it fails to load!
+    const widgetIconHTML = `<img src="images/robot.png" alt="AI" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=AI&background=6366f1&color=fff&rounded=true';" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+
+    container.innerHTML = `
+        <div id="ai-chat-widget" style="display: none; position: fixed; bottom: 25px; right: 25px; z-index: 9999; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+            <div id="chat-popup" style="display: none; width: 360px; height: 550px; background: white; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); flex-direction: column; overflow: hidden; margin-bottom: 15px; border: 1px solid rgba(0,0,0,0.05);">
+                
+                <div style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 25px; height: 25px;">${widgetIconHTML}</div>
+                        <h6 style="margin: 0; font-weight: 700; font-size: 1.1rem; letter-spacing: 0.5px;">AI Assistant</h6>
+                    </div>
+                    <button id="chat-close" style="background: none; border: none; color: white; cursor: pointer; font-size: 1.8rem; line-height: 1;">&times;</button>
+                </div>
+                
+                <div id="widget-chat-messages" style="flex: 1; padding: 20px; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; gap: 15px;">
+                    <div style="display: flex; justify-content: flex-start;">
+                        <div style="background: white; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 16px 16px 16px 4px; color: #333; font-size: 0.95rem; box-shadow: 0 2px 5px rgba(0,0,0,0.02); max-width: 85%; line-height: 1.4;">
+                            👋 Hi! I can recommend products, compare items, or check on your order status!
+                        </div>
+                    </div>
+                    <div id="widget-typing-indicator" style="display: none; justify-content: flex-start; align-items: center; gap: 5px; padding: 10px;">
+                        <div style="width: 8px; height: 8px; background: #a855f7; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both;"></div>
+                        <div style="width: 8px; height: 8px; background: #a855f7; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; animation-delay: 0.16s;"></div>
+                        <div style="width: 8px; height: 8px; background: #a855f7; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; animation-delay: 0.32s;"></div>
+                    </div>
+                </div>
+                
+                <div style="padding: 15px; background: white; border-top: 1px solid #eee; display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="widget-chat-input" placeholder="Compare items or track orders..." style="flex: 1; border: 2px solid #f1f5f9; border-radius: 25px; padding: 12px 18px; font-size: 0.95rem; outline: none; transition: border 0.3s; background: #f8fafc;">
+                    <button id="widget-chat-send" style="background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; border-radius: 50%; width: 45px; height: 45px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(99,102,241,0.3);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="chat-toggle" style="width: 65px; height: 65px; border-radius: 50%; background: white; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4); margin-left: auto; transition: transform 0.2s; border: 2px solid #6366f1;">
+                ${widgetIconHTML}
+            </div>
+        </div>
+        <style>@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }</style>
+    `;
+    
+    initChatWidget();
 });
 
-// ============================================================
-// WIDGET INITIALIZATION & LOGIC
-// ============================================================
 function initChatWidget() {
     const userId = localStorage.getItem('userId');
     const widget = document.getElementById('ai-chat-widget');
     
-    // Only show the widget bubble if the user is logged in
+    // Require user to be logged in to see chat
     if (userId && widget) {
         widget.style.display = 'block';
     }
 
-    // Add the typing indicator using the NEW CSS classes
-    const messagesContainer = document.getElementById('widget-chat-messages');
-    if (messagesContainer && !document.getElementById('widget-typing-indicator')) {
-        messagesContainer.innerHTML += `
-            <div id="widget-typing-indicator" class="msg-row msg-ai" style="display: none;">
-                <div class="typing-bubble">
-                    <div class="typing-dots"><span></span><span></span><span></span></div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Bind UI Event Listeners safely using optional chaining (?)
     document.getElementById('chat-toggle')?.addEventListener('click', function() {
         const popup = document.getElementById('chat-popup');
         popup.style.display = popup.style.display === 'none' ? 'flex' : 'none';
@@ -76,14 +81,9 @@ function initChatWidget() {
 
 function scrollToBottom() {
     const container = document.getElementById('widget-chat-messages');
-    if (container) {
-        container.scrollTop = container.scrollHeight;
-    }
+    if (container) container.scrollTop = container.scrollHeight;
 }
 
-// ============================================================
-// AI API COMMUNICATION
-// ============================================================
 async function sendWidgetMessage() {
     const input = document.getElementById('widget-chat-input');
     const userId = localStorage.getItem('userId');
@@ -95,21 +95,16 @@ async function sendWidgetMessage() {
     input.value = '';
     addWidgetMessage('user', message);
     
-    // Show Typing Indicator
     const typingIndicator = document.getElementById('widget-typing-indicator');
     if (typingIndicator) typingIndicator.style.display = 'flex';
     scrollToBottom();
 
-    // Harvest Context (Page name & Cart Count)
     const currentPage = window.location.pathname.split('/').pop() || 'Home';
     const cartCountElement = document.getElementById('cart-count');
     const cartCount = cartCountElement ? cartCountElement.textContent : '0';
 
-  try {
-        // 1. Define your live Render Backend URL here:
+    try {
         const BACKEND_URL = "https://ai-ecommerce-backend-barh.onrender.com"; 
-
-        // 2. Attach it to the fetch request!
         const response = await fetch(`${BACKEND_URL}/api/chat`, { 
             method: 'POST',
             headers: { 
@@ -131,7 +126,7 @@ async function sendWidgetMessage() {
         
     } catch (error) {
         if (typingIndicator) typingIndicator.style.display = 'none';
-        addWidgetMessage('ai', 'Sorry, I encountered an error. Please try again.');
+        addWidgetMessage('ai', 'Sorry, I encountered an error connecting to the server.');
         console.error('Chat error:', error);
     }
 }
@@ -142,12 +137,17 @@ function addWidgetMessage(type, text) {
     if (!container) return;
 
     const div = document.createElement('div');
+    div.style.display = 'flex';
+    div.style.justifyContent = type === 'user' ? 'flex-end' : 'flex-start';
     
-    // Use the sleek new CSS classes instead of inline styles
-    div.className = `msg-row ${type === 'user' ? 'msg-user' : 'msg-ai'}`;
-    div.innerHTML = `<div class="bubble ${type === 'user' ? 'bubble-user' : 'bubble-ai'}">${text}</div>`;
+    // Self-contained inline styling means it NEVER breaks!
+    const bubbleBg = type === 'user' ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'white';
+    const textColor = type === 'user' ? 'white' : '#333';
+    const borderStyle = type === 'user' ? 'none' : '1px solid #e2e8f0';
+    const borderRadius = type === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px';
+
+    div.innerHTML = `<div style="background: ${bubbleBg}; color: ${textColor}; border: ${borderStyle}; padding: 12px 16px; border-radius: ${borderRadius}; font-size: 0.95rem; box-shadow: 0 2px 5px rgba(0,0,0,0.02); max-width: 85%; line-height: 1.5; word-wrap: break-word;">${text}</div>`;
     
-    // Always insert the message BEFORE the typing indicator so the dots stay at the bottom
     if (typingIndicator && typingIndicator.parentNode === container) {
         container.insertBefore(div, typingIndicator);
     } else {
