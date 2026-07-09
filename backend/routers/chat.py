@@ -31,7 +31,7 @@ def get_product_recommendation(query: str) -> str:
     elif price_limit and detected_category: sql = "SELECT * FROM products WHERE price <= %s AND category_name = %s LIMIT 5"; params = (price_limit, detected_category)
     elif price_limit: sql = "SELECT * FROM products WHERE price <= %s LIMIT 5"; params = (price_limit,)
     elif detected_category: sql = "SELECT * FROM products WHERE category_name = %s LIMIT 5"; params = (detected_category,)
-    elif query.lower().strip() in ["", "featured", "all", "explore"]: sql = "SELECT * FROM products ORDER BY RAND() LIMIT 4"; params = ()
+    elif query.lower().strip() in ["", "featured", "all", "explore", "recommend"]: sql = "SELECT * FROM products ORDER BY RAND() LIMIT 4"; params = ()
     else: sql = "SELECT * FROM products WHERE product_name LIKE %s OR description LIKE %s LIMIT 5"; params = (f"%{query}%", f"%{query}%")
     
     try:
@@ -67,7 +67,7 @@ def compare_products(product_a: str, product_b: str) -> str:
     finally: cursor.close(); close_db_connection(conn)
 
 # ==========================================
-# 3. NEW: DEEP PRODUCT DETAILS
+# 3. DEEP PRODUCT DETAILS
 # ==========================================
 def get_product_details(product_name: str) -> str:
     conn = get_db_connection()
@@ -83,12 +83,11 @@ def get_product_details(product_name: str) -> str:
     return json.dumps(p)
 
 # ==========================================
-# 4. NEW: FIND CHEAPER ALTERNATIVES
+# 4. FIND CHEAPER ALTERNATIVES
 # ==========================================
 def find_cheaper_alternative(product_name: str) -> str:
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    # Find original product price and category
     cursor.execute("SELECT price, category_name FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
     target = cursor.fetchone()
     
@@ -96,7 +95,6 @@ def find_cheaper_alternative(product_name: str) -> str:
         cursor.close(); close_db_connection(conn)
         return json.dumps({"message": "Original product not found to compare."})
 
-    # Find cheaper items in the same category
     cursor.execute("SELECT * FROM products WHERE category_name = %s AND price < %s ORDER BY price DESC LIMIT 3", (target['category_name'], target['price']))
     alts = cursor.fetchall()
     cursor.close(); close_db_connection(conn)
@@ -110,7 +108,7 @@ def find_cheaper_alternative(product_name: str) -> str:
     return json.dumps(alts)
 
 # ==========================================
-# 5. NEW: FULL ORDER HISTORY
+# 5. FULL ORDER HISTORY
 # ==========================================
 def get_user_order_history(user_id: int) -> str:
     conn = get_db_connection()
@@ -172,10 +170,11 @@ async def process_chat(request: ChatRequest):
     try:
         current_page = request.context.page if request.context else "Unknown"
         cart_count = request.context.cart_items if request.context else "Unknown"
+        safe_user_id = request.user_id if request.user_id else 0
 
-        # The System Prompt is updated to handle gorgeous UI formatting for ALL new features!
+        # THE FIX: Added CURRENT_USER_ID so the AI knows exactly who is talking!
         dynamic_system_prompt = f"""You are an elite AI shopping assistant for AI Store.
-        USER CONTEXT: Looking at page: {current_page} | Items in cart: {cart_count}.
+        USER CONTEXT: Looking at page: {current_page} | Items in cart: {cart_count} | CURRENT_USER_ID: {safe_user_id}.
         
         RICH UI CAPABILITIES (CRITICAL):
         You MUST format your responses using these exact HTML templates when returning data from your tools:
@@ -186,7 +185,7 @@ async def process_chat(request: ChatRequest):
             <div style="flex: 1;">
                 <h6 style="font-weight: 700; font-size: 0.95rem; color: #0f172a; margin-bottom: 4px;">[product_name]</h6>
                 <div style="font-weight: 800; color: #6366f1; font-size: 1.1rem; margin-bottom: 8px;">₹[price]</div>
-                <button style="background: #0f172a; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 0.8rem; cursor: pointer;" onclick="apiAddToCart({request.user_id}, [product_id]).then(() => showToast('Added to Cart!', 'success'))">Add to Cart</button>
+                <button style="background: #0f172a; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 0.8rem; cursor: pointer;" onclick="apiAddToCart({safe_user_id}, [product_id]).then(() => showToast('Added to Cart!', 'success'))">Add to Cart</button>
             </div>
         </div>
         
@@ -199,7 +198,7 @@ async def process_chat(request: ChatRequest):
             <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 15px; line-height: 1.5;">[description]</p>
             <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 15px;">
                 <span style="font-weight: 900; color: #6366f1; font-size: 1.3rem;">₹[price]</span>
-                <button style="background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: bold; cursor: pointer;" onclick="apiAddToCart({request.user_id}, [product_id]).then(() => showToast('Added!', 'success'))">Buy Now</button>
+                <button style="background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: bold; cursor: pointer;" onclick="apiAddToCart({safe_user_id}, [product_id]).then(() => showToast('Added!', 'success'))">Buy Now</button>
             </div>
         </div>
 
@@ -214,16 +213,72 @@ async def process_chat(request: ChatRequest):
         </div>
         """
 
-        # ALL 8 TOOLS REGISTERED
+        # THE FIX: Every tool now has a strict description so Llama 3 knows exactly how to use it!
         tools = [
-            {"type": "function", "function": {"name": "get_product_recommendation", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-            {"type": "function", "function": {"name": "compare_products", "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}}},
-            {"type": "function", "function": {"name": "get_product_details", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
-            {"type": "function", "function": {"name": "find_cheaper_alternative", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
-            {"type": "function", "function": {"name": "get_user_order_history", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}}, "required": ["user_id"]}}},
-            {"type": "function", "function": {"name": "place_order", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["user_id", "product_name", "quantity"]}}},
-            {"type": "function", "function": {"name": "check_order_status", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}},
-            {"type": "function", "function": {"name": "cancel_order", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}}
+            {
+                "type": "function", 
+                "function": {
+                    "name": "get_product_recommendation", 
+                    "description": "Get product recommendations based on a keyword. Use this when the user asks to see products generally.",
+                    "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Search keyword. Use 'featured' if no specific item is requested."}}, "required": ["query"]}
+                }
+            },
+            {
+                "type": "function", 
+                "function": {
+                    "name": "compare_products", 
+                    "description": "Compare two specific products side by side.",
+                    "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}
+                }
+            },
+            {
+                "type": "function", 
+                "function": {
+                    "name": "get_product_details", 
+                    "description": "Get deep details, description, and exact stock for a single product.",
+                    "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}
+                }
+            },
+            {
+                "type": "function", 
+                "function": {
+                    "name": "find_cheaper_alternative", 
+                    "description": "Find cheaper alternatives in the same category as the requested product.",
+                    "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}
+                }
+            },
+            {
+                "type": "function", 
+                "function": {
+                    "name": "get_user_order_history", 
+                    "description": "Retrieve the recent order history for the current user.",
+                    "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}}, "required": ["user_id"]}
+                }
+            },
+            {
+                "type": "function", 
+                "function": {
+                    "name": "place_order", 
+                    "description": "Place a new order for a product.",
+                    "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["user_id", "product_name", "quantity"]}
+                }
+            },
+            {
+                "type": "function", 
+                "function": {
+                    "name": "check_order_status", 
+                    "description": "Check the shipping status of a specific order ID.",
+                    "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}
+                }
+            },
+            {
+                "type": "function", 
+                "function": {
+                    "name": "cancel_order", 
+                    "description": "Cancel an existing order by its ID.",
+                    "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}
+                }
+            }
         ]
 
         messages = [{"role": "system", "content": dynamic_system_prompt}, {"role": "user", "content": request.message}]
@@ -241,10 +296,10 @@ async def process_chat(request: ChatRequest):
             elif func_name == "compare_products": result = compare_products(args["product_a"], args["product_b"])
             elif func_name == "get_product_details": result = get_product_details(args["product_name"])
             elif func_name == "find_cheaper_alternative": result = find_cheaper_alternative(args["product_name"])
-            elif func_name == "get_user_order_history": result = get_user_order_history(args["user_id"])
-            elif func_name == "place_order": result = place_order(args["user_id"], args["product_name"], args["quantity"])
-            elif func_name == "check_order_status": result = check_order_status(args["user_id"], args["order_id"])
-            elif func_name == "cancel_order": result = cancel_order(args["user_id"], args["order_id"])
+            elif func_name == "get_user_order_history": result = get_user_order_history(args.get("user_id", safe_user_id))
+            elif func_name == "place_order": result = place_order(args.get("user_id", safe_user_id), args["product_name"], args["quantity"])
+            elif func_name == "check_order_status": result = check_order_status(args.get("user_id", safe_user_id), args["order_id"])
+            elif func_name == "cancel_order": result = cancel_order(args.get("user_id", safe_user_id), args["order_id"])
             else: result = json.dumps({"error": "Unknown function"})
             
             messages.append({"role": "tool", "tool_call_id": tool_call.id, "name": func_name, "content": str(result)})
