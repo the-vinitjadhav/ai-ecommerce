@@ -13,11 +13,11 @@ api_key = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=api_key) if api_key else None
 
 # ==========================================
-# 1. RECOMMENDATIONS (Python Native Rendering)
+# 1. RECOMMENDATIONS
 # ==========================================
-def get_product_recommendation(query: str, user_id: int) -> str:
+def get_product_recommendation(query: str) -> str:
     conn = get_db_connection()
-    if not conn: return "Database connection failed."
+    if not conn: return json.dumps({"error": "Database connection failed."})
     cursor = conn.cursor(dictionary=True)
     
     price_limit = None
@@ -38,108 +38,62 @@ def get_product_recommendation(query: str, user_id: int) -> str:
         cursor.execute(sql, params)
         products = cursor.fetchall()
         
-        # SMART FALLBACK: If nothing matches exactly, just grab 4 random items so the chat never feels empty
+        # SMART FALLBACK: If user types gibberish, return random items instead of returning nothing!
         if not products:
             cursor.execute("SELECT * FROM products ORDER BY RAND() LIMIT 4")
             products = cursor.fetchall()
 
-        if not products: return "Sorry, the store is currently empty!"
-
-        # PYTHON BUILDS THE HTML (AI CANNOT MESS THIS UP)
-        html = "<p style='margin-bottom: 10px; color: #475569;'>Here are some excellent choices I found for you:</p>"
-        html += "<div style='display:flex; flex-direction:column; gap:10px;'>"
         for p in products:
-            img = p.get('image_url', '')
-            if not img or not str(img).startswith('http'):
-                img = f"https://ui-avatars.com/api/?name={urllib.parse.quote(p.get('product_name', 'P'))}&background=random&color=fff&size=200&bold=true"
-            
-            html += f"""
-            <div style="display: flex; gap: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); max-width: 400px; align-items: center;">
-                <img src="{img}" style="width: 70px; height: 70px; object-fit: cover; border-radius: 12px; flex-shrink: 0;">
-                <div style="flex: 1;">
-                    <h6 style="font-weight: 700; font-size: 0.95rem; color: #0f172a; margin-bottom: 4px; line-height: 1.2;">{p['product_name']}</h6>
-                    <div style="font-weight: 800; color: #6366f1; font-size: 1.1rem; margin-bottom: 8px;">₹{p['price']}</div>
-                    <button style="background: #0f172a; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 0.8rem; cursor: pointer;" onclick="apiAddToCart({user_id}, {p['product_id']}).then(() => {{ if(typeof showToast === 'function') showToast('Added to Cart!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }})">Add to Cart</button>
-                </div>
-            </div>
-            """
-        html += "</div>"
-        return html
-    except Exception as e: return f"Error retrieving products: {str(e)}"
+            if 'price' in p and p['price'] is not None: p['price'] = float(p['price'])
+            if not p.get('image_url') or not str(p['image_url']).startswith('http'):
+                p['image_url'] = f"https://ui-avatars.com/api/?name={urllib.parse.quote(p.get('product_name', 'P'))}&background=random&color=fff&size=200&bold=true"
+        return json.dumps(products)
+    except Exception as e: return json.dumps({"error": str(e)})
     finally: cursor.close(); close_db_connection(conn)
 
 # ==========================================
-# 2. COMPARISONS (Python Native Rendering)
+# 2. COMPARISONS
 # ==========================================
-def compare_products(product_a: str, product_b: str, user_id: int) -> str:
+def compare_products(product_a: str, product_b: str) -> str:
     conn = get_db_connection()
-    if not conn: return "Database connection failed."
+    if not conn: return json.dumps({"error": "Database connection failed."})
     try:
         cursor = conn.cursor(dictionary=True)
         results = []
         for term in [product_a, product_b]:
             cursor.execute("SELECT * FROM products WHERE product_name LIKE %s OR description LIKE %s LIMIT 1", (f"%{term}%", f"%{term}%"))
             p = cursor.fetchone()
-            if p: results.append(p)
+            if p:
+                if 'price' in p and p['price'] is not None: p['price'] = float(p['price'])
+                if not p.get('image_url') or not str(p['image_url']).startswith('http'):
+                    p['image_url'] = f"https://ui-avatars.com/api/?name={urllib.parse.quote(p.get('product_name', 'P'))}&background=random&color=fff&size=200&bold=true"
+                results.append(p)
                 
-        if not results: return f"Could not find exact matches for '{product_a}' and '{product_b}' to compare."
-
-        html = "<p style='margin-bottom: 10px; color: #475569;'>Here is the side-by-side comparison:</p>"
-        html += "<div style='display: flex; gap: 15px; overflow-x: auto; padding: 10px 0; max-width: 100%;'>"
-        for p in results:
-            img = p.get('image_url', '')
-            if not img or not str(img).startswith('http'):
-                img = f"https://ui-avatars.com/api/?name={urllib.parse.quote(p.get('product_name', 'P'))}&background=random&color=fff&size=200&bold=true"
-            html += f"""
-            <div style="flex: 1; min-width: 180px; background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                <img src="{img}" style="width: 90px; height: 90px; object-fit: cover; border-radius: 12px; margin-bottom: 12px;">
-                <h6 style="font-size: 0.9rem; font-weight: bold; color: #0f172a; margin-bottom: 5px; height: 35px; overflow: hidden;">{p['product_name']}</h6>
-                <p style="color: #6366f1; font-weight: 800; font-size: 1.2rem; margin-bottom: 10px;">₹{p['price']}</p>
-                <div style="font-size: 0.8rem; color: #64748b; margin-bottom: 15px; text-align: left; background: #f8fafc; padding: 10px; border-radius: 8px;">
-                    <b>Category:</b> {p.get('category_name', 'Unknown')}
-                </div>
-                <button style="background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; padding: 10px 15px; border-radius: 10px; width: 100%; cursor: pointer;" onclick="apiAddToCart({user_id}, {p['product_id']}).then(() => {{ if(typeof showToast === 'function') showToast('Added to Cart!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }})">Add to Cart</button>
-            </div>
-            """
-        html += "</div>"
-        return html
-    except Exception as e: return f"Error during comparison: {str(e)}"
+        if not results: return json.dumps({"message": f"Could not find any items matching '{product_a}' and '{product_b}'."})
+        return json.dumps(results)
+    except Exception as e: return json.dumps({"error": str(e)})
     finally: cursor.close(); close_db_connection(conn)
 
 # ==========================================
 # 3. DEEP PRODUCT DETAILS
 # ==========================================
-def get_product_details(product_name: str, user_id: int) -> str:
+def get_product_details(product_name: str) -> str:
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
     p = cursor.fetchone()
     cursor.close(); close_db_connection(conn)
-    if not p: return f"I couldn't find a product matching '{product_name}' in our catalog."
+    if not p: return json.dumps({"message": f"Could not find details for {product_name}."})
     
-    img = p.get('image_url', '')
-    if not img or not str(img).startswith('http'):
-        img = f"https://ui-avatars.com/api/?name={urllib.parse.quote(p.get('product_name', 'P'))}&background=random&color=fff&size=200&bold=true"
-    
-    html = f"""
-    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; margin-top: 5px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-        <img src="{img}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 15px;">
-        <span style="background: #e0e7ff; color: #4338ca; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: bold;">{p.get('category_name', 'General')}</span>
-        <span style="background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; margin-left: 5px;">{p.get('stock', 0)} in stock</span>
-        <h5 style="font-weight: 800; color: #0f172a; margin: 12px 0 8px 0;">{p['product_name']}</h5>
-        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 15px; line-height: 1.5;">{p.get('description', 'A premium product from AI Store.')}</p>
-        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 15px;">
-            <span style="font-weight: 900; color: #6366f1; font-size: 1.3rem;">₹{p['price']}</span>
-            <button style="background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: bold; cursor: pointer;" onclick="apiAddToCart({user_id}, {p['product_id']}).then(() => {{ if(typeof showToast === 'function') showToast('Added!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }})">Buy Now</button>
-        </div>
-    </div>
-    """
-    return html
+    if 'price' in p and p['price'] is not None: p['price'] = float(p['price'])
+    if not p.get('image_url') or not str(p['image_url']).startswith('http'):
+        p['image_url'] = f"https://ui-avatars.com/api/?name={urllib.parse.quote(p.get('product_name', 'P'))}&background=random&color=fff&size=200&bold=true"
+    return json.dumps(p)
 
 # ==========================================
 # 4. FIND CHEAPER ALTERNATIVES
 # ==========================================
-def find_cheaper_alternative(product_name: str, user_id: int) -> str:
+def find_cheaper_alternative(product_name: str) -> str:
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT price, category_name FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
@@ -147,38 +101,25 @@ def find_cheaper_alternative(product_name: str, user_id: int) -> str:
     
     if not target: 
         cursor.close(); close_db_connection(conn)
-        return "I couldn't find the original product to compare against."
+        return json.dumps({"message": "Original product not found to compare."})
 
     cursor.execute("SELECT * FROM products WHERE category_name = %s AND price < %s ORDER BY price DESC LIMIT 3", (target['category_name'], target['price']))
     alts = cursor.fetchall()
     cursor.close(); close_db_connection(conn)
     
-    if not alts: return f"There are currently no cheaper alternatives in the {target['category_name']} category."
+    if not alts: return json.dumps({"message": f"No cheaper alternatives found in {target['category_name']}."})
     
-    html = "<p style='margin-bottom: 10px; color: #475569;'>Here are some great budget-friendly alternatives:</p>"
-    html += "<div style='display:flex; flex-direction:column; gap:10px;'>"
     for p in alts:
-        img = p.get('image_url', '')
-        if not img or not str(img).startswith('http'):
-            img = f"https://ui-avatars.com/api/?name={urllib.parse.quote(p.get('product_name', 'P'))}&background=random&color=fff&size=200&bold=true"
-        html += f"""
-        <div style="display: flex; gap: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); max-width: 400px; align-items: center;">
-            <img src="{img}" style="width: 70px; height: 70px; object-fit: cover; border-radius: 12px; flex-shrink: 0;">
-            <div style="flex: 1;">
-                <h6 style="font-weight: 700; font-size: 0.95rem; color: #0f172a; margin-bottom: 4px; line-height: 1.2;">{p['product_name']}</h6>
-                <div style="font-weight: 800; color: #16a34a; font-size: 1.1rem; margin-bottom: 8px;">₹{p['price']}</div>
-                <button style="background: #0f172a; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 0.8rem; cursor: pointer;" onclick="apiAddToCart({user_id}, {p['product_id']}).then(() => {{ if(typeof showToast === 'function') showToast('Added to Cart!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }})">Add to Cart</button>
-            </div>
-        </div>
-        """
-    html += "</div>"
-    return html
+        if 'price' in p and p['price'] is not None: p['price'] = float(p['price'])
+        if not p.get('image_url') or not str(p['image_url']).startswith('http'):
+            p['image_url'] = f"https://ui-avatars.com/api/?name={urllib.parse.quote(p.get('product_name', 'P'))}&background=random&color=fff&size=200&bold=true"
+    return json.dumps(alts)
 
 # ==========================================
 # 5. FULL ORDER HISTORY
 # ==========================================
 def get_user_order_history(user_id: int) -> str:
-    if user_id == 0: return "Please log in to view your order history."
+    if user_id == 0: return json.dumps({"message": "Please log in to view orders."})
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("""
@@ -188,81 +129,71 @@ def get_user_order_history(user_id: int) -> str:
     orders = cursor.fetchall()
     cursor.close(); close_db_connection(conn)
     
-    if not orders: return "You have no recent orders on this account."
-    
-    html = "<p style='margin-bottom: 10px; color: #475569;'>Here are your most recent orders:</p>"
+    if not orders: return json.dumps({"message": "You have no recent orders."})
     for o in orders:
-        html += f"""
-        <div style="background: white; border-left: 4px solid #6366f1; padding: 12px 15px; margin-top: 10px; border-radius: 0 12px 12px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                <b style="color: #0f172a;">Order #{o['order_id']}</b>
-                <span style="background: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">{o['status']}</span>
-            </div>
-            <div style="color: #64748b; font-size: 0.85rem;">Date: {o.get('formatted_date', '')}</div>
-            <div style="color: #6366f1; font-weight: bold; font-size: 0.95rem; margin-top: 5px;">Total: ₹{o['total_amount']}</div>
-        </div>
-        """
-    return html
+        if 'total_amount' in o and o['total_amount'] is not None: o['total_amount'] = float(o['total_amount'])
+    return json.dumps(orders)
 
 # ==========================================
 # 6, 7, 8. EXISTING ORDER ACTIONS
 # ==========================================
 def place_order(user_id: int, product_name: str, quantity: int) -> str:
-    if user_id == 0: return "You must be logged in to place an order."
+    if user_id == 0: return json.dumps({"message": "You must log in to place an order."})
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT product_id, price, stock FROM products WHERE product_name LIKE %s", (f"%{product_name}%",))
     product = cursor.fetchone()
-    if not product: return "Sorry, I couldn't find that product to order."
-    if product['stock'] < quantity: return f"We don't have enough stock for {quantity} items."
+    if not product: return json.dumps({"message": "Product not found."})
     total = product['price'] * quantity
     cursor.execute("INSERT INTO orders (user_id, total_amount, status) VALUES (%s, %s, 'pending')", (user_id, total))
     order_id = cursor.lastrowid
     cursor.execute("INSERT INTO order_items (order_id, product_id, product_name, price, quantity) VALUES (%s, %s, %s, %s, %s)", (order_id, product['product_id'], product_name, product['price'], quantity))
     cursor.execute("UPDATE products SET stock = stock - %s WHERE product_id = %s", (quantity, product['product_id']))
     conn.commit(); cursor.close(); close_db_connection(conn)
-    return f"Success! Order #{order_id} has been placed."
+    return json.dumps({"message": f"Order #{order_id} placed successfully."})
 
 def check_order_status(user_id: int, order_id: int) -> str:
-    if user_id == 0: return "Please log in to track orders."
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT order_id, total_amount, status FROM orders WHERE order_id = %s AND user_id = %s", (order_id, user_id))
     order = cursor.fetchone()
     cursor.close(); close_db_connection(conn)
-    return f"Order #{order_id} is currently **{order['status'].upper()}**." if order else "I couldn't find an order with that ID."
+    if not order: return json.dumps({"message": "Order not found."})
+    return json.dumps({"message": f"Order #{order_id} Status: {order['status']} (Total: ₹{order['total_amount']})"})
 
 def cancel_order(user_id: int, order_id: int) -> str:
-    if user_id == 0: return "Please log in to cancel orders."
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT status FROM orders WHERE order_id = %s AND user_id = %s", (order_id, user_id))
     result = cursor.fetchone()
-    if not result: return "I couldn't find an order with that ID to cancel."
+    if not result: return json.dumps({"message": "Order not found."})
     cursor.execute("UPDATE orders SET status = 'cancelled' WHERE order_id = %s", (order_id,))
     conn.commit(); cursor.close(); close_db_connection(conn)
-    return f"Order #{order_id} has been successfully cancelled."
+    return json.dumps({"message": f"Order #{order_id} cancelled successfully."})
 
 
 # ==========================================
-# MAIN AI PROCESSING ENGINE (SINGLE-STAGE FAST EXECUTION)
+# MAIN AI ENGINE (TWO-STAGE + NO GUESSING)
 # ==========================================
 @router.post("")
 async def process_chat(request: ChatRequest):
-    if not client: return {"response": "AI configuration error. Missing API Key."}
+    if not client: return {"response": "AI config error. Missing API Key."}
     try:
         safe_user_id = request.user_id if request.user_id else 0
 
-        # The AI's ONLY job is to select the tool. Python handles all UI rendering natively.
-        system_prompt = """You are an elite AI shopping assistant for AI Store. 
-        Determine what the user wants to do, and call the correct tool.
-        DO NOT attempt to format UI or HTML. The system handles all UI automatically.
-        If the user says 'hello', greets you, or asks a general non-store question, reply naturally and warmly."""
+        # STAGE 1: Determine tool to use, but NEVER GUESS names!
+        stage1_prompt = """You are an AI assistant for an E-commerce store. 
+        Determine the user's intent and call the correct tool.
+        
+        CRITICAL RULES:
+        1. If the user asks to COMPARE products, but does not explicitly name TWO real products, DO NOT guess (never use "Product 1"). Ask them which products they want to compare!
+        2. If the user asks for details but doesn't name a product, ask them.
+        3. Do not format the output yet. Just call the tool or reply in text."""
 
         tools = [
-            {"type": "function", "function": {"name": "get_product_recommendation", "description": "Search and recommend products.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Search keyword. Use 'featured' if general."}}, "required": ["query"]}}},
-            {"type": "function", "function": {"name": "compare_products", "description": "Compare two products.", "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}}},
-            {"type": "function", "function": {"name": "get_product_details", "description": "Get deep specs for a single product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
+            {"type": "function", "function": {"name": "get_product_recommendation", "description": "Recommend products.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+            {"type": "function", "function": {"name": "compare_products", "description": "Compare two specific products.", "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}}},
+            {"type": "function", "function": {"name": "get_product_details", "description": "Get specs for a specific product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
             {"type": "function", "function": {"name": "find_cheaper_alternative", "description": "Find cheaper alternatives.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
             {"type": "function", "function": {"name": "get_user_order_history", "description": "Get recent orders.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}}, "required": ["user_id"]}}},
             {"type": "function", "function": {"name": "place_order", "description": "Place an order.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["user_id", "product_name", "quantity"]}}},
@@ -270,31 +201,65 @@ async def process_chat(request: ChatRequest):
             {"type": "function", "function": {"name": "cancel_order", "description": "Cancel an order.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}}
         ]
 
-        # ONE Single Call to Groq (Lightning Fast)
-        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": request.message}]
+        messages = [{"role": "system", "content": stage1_prompt}, {"role": "user", "content": request.message}]
         response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, temperature=0.1, tools=tools)
         response_message = response.choices[0].message
 
-        # If Groq decides a Tool is needed, Python executes it and returns the HTML immediately!
         if response_message.tool_calls:
+            messages.append({"role": "assistant", "content": response_message.content, "tool_calls": [{"id": t.id, "type": t.type, "function": {"name": t.function.name, "arguments": t.function.arguments}} for t in response_message.tool_calls]})
+            
             tool_call = response_message.tool_calls[0]
             func_name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
             
-            if func_name == "get_product_recommendation": result = get_product_recommendation(args.get("query", "featured"), safe_user_id)
-            elif func_name == "compare_products": result = compare_products(args["product_a"], args["product_b"], safe_user_id)
-            elif func_name == "get_product_details": result = get_product_details(args["product_name"], safe_user_id)
-            elif func_name == "find_cheaper_alternative": result = find_cheaper_alternative(args["product_name"], safe_user_id)
+            if func_name == "get_product_recommendation": result = get_product_recommendation(args.get("query", "featured"))
+            elif func_name == "compare_products": result = compare_products(args["product_a"], args["product_b"])
+            elif func_name == "get_product_details": result = get_product_details(args["product_name"])
+            elif func_name == "find_cheaper_alternative": result = find_cheaper_alternative(args["product_name"])
             elif func_name == "get_user_order_history": result = get_user_order_history(args.get("user_id", safe_user_id))
             elif func_name == "place_order": result = place_order(args.get("user_id", safe_user_id), args["product_name"], args.get("quantity", 1))
             elif func_name == "check_order_status": result = check_order_status(args.get("user_id", safe_user_id), args["order_id"])
             elif func_name == "cancel_order": result = cancel_order(args.get("user_id", safe_user_id), args["order_id"])
-            else: result = "I'm sorry, I couldn't perform that action."
+            else: result = json.dumps({"error": "Unknown function"})
             
-            # Send the perfectly formatted Python HTML straight back to the widget!
-            return {"response": result}
-        
-        # If Groq just wants to say "Hello!", send the text back.
+            messages.append({"role": "tool", "tool_call_id": tool_call.id, "name": func_name, "content": str(result)})
+            
+            # STAGE 2: Format the Data. Transparent styles used so they look good INSIDE the chat bubble!
+            stage2_prompt = f"""You are an elite AI shopping assistant. You just received raw data from the database.
+            
+            CRITICAL RULES:
+            1. If the database returned an error, a plain text message, or said "Could not find matches", DO NOT USE HTML. Just apologize and explain the issue in plain text.
+            2. NEVER invent fake products like "Product 1". Only output the actual JSON data provided.
+            
+            TEMPLATE 1 (For recommendations, alternatives, comparisons):
+            <div style="display: flex; gap: 10px; margin-top: 10px; align-items: center; border-bottom: 1px solid rgba(0,0,0,0.1); padding-bottom: 10px;">
+                <img src="[image_url]" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">
+                <div style="flex: 1;">
+                    <h6 style="font-weight: bold; font-size: 0.95rem; margin: 0 0 4px 0; color: inherit;">[product_name]</h6>
+                    <div style="font-weight: 800; font-size: 1.05rem; margin-bottom: 6px;">₹[price]</div>
+                    <button style="background: #0f172a; color: white; border: none; padding: 5px 14px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;" onclick="apiAddToCart({safe_user_id}, [product_id]).then(() => {{ if(typeof showToast === 'function') showToast('Added!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }})">Add to Cart</button>
+                </div>
+            </div>
+
+            TEMPLATE 2 (For deep product details):
+            <div style="margin-top: 10px;">
+                <img src="[image_url]" style="width: 100%; height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 10px;">
+                <div style="margin-bottom: 8px;">
+                    <span style="background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: bold;">[category_name]</span>
+                </div>
+                <h5 style="font-weight: bold; margin: 0 0 5px 0;">[product_name]</h5>
+                <p style="font-size: 0.85rem; opacity: 0.9; line-height: 1.4; margin-bottom: 10px;">[description]</p>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: bold; font-size: 1.2rem;">₹[price]</span>
+                    <button style="background: #0f172a; color: white; border: none; padding: 6px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;" onclick="apiAddToCart({safe_user_id}, [product_id]).then(() => {{ if(typeof showToast === 'function') showToast('Added!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }})">Buy Now</button>
+                </div>
+            </div>
+            """
+            
+            messages[0] = {"role": "system", "content": stage2_prompt}
+            second_response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, temperature=0.1)
+            return {"response": second_response.choices[0].message.content}
+            
         else:
             return {"response": response_message.content}
             
