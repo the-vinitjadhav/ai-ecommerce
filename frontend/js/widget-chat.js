@@ -1,13 +1,17 @@
 // ============================================================
 // FILE: frontend/js/widget-chat.js
-// PURPOSE: Self-Contained Floating AI Chat Widget with Custom Image Fix
+// PURPOSE: Global Auth Controller & Floating AI Chat Widget
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
+    // 1. FIX THE "FAKE LOGOUT" BUG ACROSS ALL PAGES
+    enforceGlobalAuth();
+
+    // 2. INJECT THE WIDGET HTML DIRECTLY
     const container = document.getElementById('ai-chat-widget-container');
     if (!container) return;
 
-    // We use a custom avatar image, with a robust fallback if it fails to load!
+    // Cloud-Proof Image Fallback for the Widget Icon
     const widgetIconHTML = `<img src="images/robot.png" alt="AI" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=AI&background=6366f1&color=fff&rounded=true';" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
 
     container.innerHTML = `
@@ -25,8 +29,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div id="widget-chat-messages" style="flex: 1; padding: 20px; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; gap: 15px;">
                     <div style="display: flex; justify-content: flex-start;">
                         <div style="background: white; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 16px 16px 16px 4px; color: #333; font-size: 0.95rem; box-shadow: 0 2px 5px rgba(0,0,0,0.02); max-width: 85%; line-height: 1.4;">
-                            👋 Hello! I'm your AI shopping guide. I can help you find products, check prices, or place orders instantly.
-                        
+                            👋 Welcome to AI Store! I'm your AI shopping guide. I can help you find products, compare items, or check on your order status.
                         </div>
                     </div>
                     <div id="widget-typing-indicator" style="display: none; justify-content: flex-start; align-items: center; gap: 5px; padding: 10px;">
@@ -37,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 
                 <div style="padding: 15px; background: white; border-top: 1px solid #eee; display: flex; gap: 10px; align-items: center;">
-                    <input type="text" id="widget-chat-input" placeholder="Compare items or track orders..." style="flex: 1; border: 2px solid #f1f5f9; border-radius: 25px; padding: 12px 18px; font-size: 0.95rem; outline: none; transition: border 0.3s; background: #f8fafc;">
+                    <input type="text" id="widget-chat-input" placeholder="Ask me anything..." style="flex: 1; border: 2px solid #f1f5f9; border-radius: 25px; padding: 12px 18px; font-size: 0.95rem; outline: none; transition: border 0.3s; background: #f8fafc;">
                     <button id="widget-chat-send" style="background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; border-radius: 50%; width: 45px; height: 45px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(99,102,241,0.3);">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/></svg>
                     </button>
@@ -54,6 +57,31 @@ document.addEventListener('DOMContentLoaded', function() {
     initChatWidget();
 });
 
+// ============================================================
+// GLOBAL AUTHENTICATION CONTROLLER
+// ============================================================
+function enforceGlobalAuth() {
+    const userId = localStorage.getItem('userId');
+    const loginLink = document.getElementById('login-link');
+    
+    if (userId && loginLink) {
+        loginLink.textContent = 'Logout';
+        loginLink.href = '#';
+        loginLink.onclick = function(e) {
+            e.preventDefault();
+            localStorage.clear(); 
+            window.location.href = 'index.html';
+        };
+    } else if (!userId && loginLink) {
+        loginLink.textContent = 'Login';
+        loginLink.href = 'login.html';
+        loginLink.onclick = null;
+    }
+}
+
+// ============================================================
+// WIDGET CHAT LOGIC
+// ============================================================
 function initChatWidget() {
     const userId = localStorage.getItem('userId');
     const widget = document.getElementById('ai-chat-widget');
@@ -141,13 +169,15 @@ function addWidgetMessage(type, text) {
     div.style.display = 'flex';
     div.style.justifyContent = type === 'user' ? 'flex-end' : 'flex-start';
     
-    // Self-contained inline styling means it NEVER breaks!
-    const bubbleBg = type === 'user' ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'white';
+    // UI FIX: AI bubbles are transparent so Python HTML renders perfectly without the box-in-a-box effect
+    const bubbleBg = type === 'user' ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'transparent';
     const textColor = type === 'user' ? 'white' : '#333';
-    const borderStyle = type === 'user' ? 'none' : '1px solid #e2e8f0';
-    const borderRadius = type === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px';
+    const padding = type === 'user' ? '12px 16px' : '0px'; 
+    const borderRadius = type === 'user' ? '16px 16px 4px 16px' : '0px';
+    const shadow = type === 'user' ? '0 2px 5px rgba(0,0,0,0.02)' : 'none';
+    const widthConstraint = type === 'user' ? 'auto' : '100%';
 
-    div.innerHTML = `<div style="background: ${bubbleBg}; color: ${textColor}; border: ${borderStyle}; padding: 12px 16px; border-radius: ${borderRadius}; font-size: 0.95rem; box-shadow: 0 2px 5px rgba(0,0,0,0.02); max-width: 85%; line-height: 1.5; word-wrap: break-word;">${text}</div>`;
+    div.innerHTML = `<div style="background: ${bubbleBg}; color: ${textColor}; padding: ${padding}; border-radius: ${borderRadius}; font-size: 0.95rem; box-shadow: ${shadow}; max-width: 90%; line-height: 1.5; word-wrap: break-word; width: ${widthConstraint};">${text}</div>`;
     
     if (typingIndicator && typingIndicator.parentNode === container) {
         container.insertBefore(div, typingIndicator);
