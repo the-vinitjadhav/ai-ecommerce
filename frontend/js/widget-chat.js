@@ -25,7 +25,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div id="widget-chat-messages" style="flex: 1; padding: 20px; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; gap: 15px;">
                     <div style="display: flex; justify-content: flex-start;">
                         <div style="background: white; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 16px 16px 16px 4px; color: #333; font-size: 0.95rem; box-shadow: 0 2px 5px rgba(0,0,0,0.02); max-width: 85%; line-height: 1.4;">
-                            👋 Hi! I can recommend products, compare items, or check on your order status!
+                            👋 Hello! I'm your AI shopping guide. I can help you find products, check prices, or place orders instantly.
+                        
                         </div>
                     </div>
                     <div id="widget-typing-indicator" style="display: none; justify-content: flex-start; align-items: center; gap: 5px; padding: 10px;">
