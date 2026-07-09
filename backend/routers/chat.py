@@ -17,30 +17,47 @@ client = Groq(api_key=api_key) if api_key else None
 # ==========================================
 def get_product_recommendation(query: str, user_id: int) -> str:
     conn = get_db_connection()
-    if not conn: return "Database connection failed."
+    if not conn: 
+        return "Database connection failed."
     cursor = conn.cursor(dictionary=True)
     
     price_limit = None
     match = re.search(r'under\s*(\d+)', query, re.IGNORECASE)
-    if match: price_limit = int(match.group(1))
+    if match: 
+        price_limit = int(match.group(1))
     
     category_map = {"phone": "Electronics", "laptop": "Laptops", "computer": "Laptops", "shoe": "Clothing", "book": "Books"}
     detected_category = next((v for k, v in category_map.items() if k in query.lower()), None)
             
-    if any(word in query.lower() for word in ["latest", "new"]): sql = "SELECT * FROM products ORDER BY product_id DESC LIMIT 5"; params = ()
-    elif price_limit and detected_category: sql = "SELECT * FROM products WHERE price <= %s AND category_name = %s LIMIT 5"; params = (price_limit, detected_category)
-    elif price_limit: sql = "SELECT * FROM products WHERE price <= %s LIMIT 5"; params = (price_limit,)
-    elif detected_category: sql = "SELECT * FROM products WHERE category_name = %s LIMIT 5"; params = (detected_category,)
-    elif any(word in query.lower() for word in ["recommend", "explore", "products", "all", "show", "featured"]): sql = "SELECT * FROM products ORDER BY RAND() LIMIT 4"; params = ()
-    else: sql = "SELECT * FROM products WHERE product_name LIKE %s OR description LIKE %s LIMIT 5"; params = (f"%{query}%", f"%{query}%")
+    if any(word in query.lower() for word in ["latest", "new"]): 
+        sql = "SELECT * FROM products ORDER BY product_id DESC LIMIT 5"
+        params = ()
+    elif price_limit and detected_category: 
+        sql = "SELECT * FROM products WHERE price <= %s AND category_name = %s LIMIT 5"
+        params = (price_limit, detected_category)
+    elif price_limit: 
+        sql = "SELECT * FROM products WHERE price <= %s LIMIT 5"
+        params = (price_limit,)
+    elif detected_category: 
+        sql = "SELECT * FROM products WHERE category_name = %s LIMIT 5"
+        params = (detected_category,)
+    elif any(word in query.lower() for word in ["recommend", "explore", "products", "all", "show", "featured"]): 
+        sql = "SELECT * FROM products ORDER BY RAND() LIMIT 4"
+        params = ()
+    else: 
+        sql = "SELECT * FROM products WHERE product_name LIKE %s OR description LIKE %s LIMIT 5"
+        params = (f"%{query}%", f"%{query}%")
     
     try:
         cursor.execute(sql, params)
         products = cursor.fetchall()
+        
         if not products:
             cursor.execute("SELECT * FROM products ORDER BY RAND() LIMIT 4")
             products = cursor.fetchall()
-        if not products: return "Sorry, our store catalog is currently empty!"
+            
+        if not products: 
+            return "Sorry, our store catalog is currently empty!"
 
         html = "<div style='display:flex; flex-direction:column; gap:10px; margin-top:5px;'>"
         for p in products:
@@ -55,30 +72,36 @@ def get_product_recommendation(query: str, user_id: int) -> str:
                 <div style="flex: 1;">
                     <h6 style="margin: 0 0 4px 0; font-size: 0.9rem; font-weight: bold; color: inherit; line-height: 1.2;">{p['product_name']}</h6>
                     <div style="font-weight: 800; color: #6366f1; font-size: 1.05rem; margin-bottom: 6px;">₹{p['price']}</div>
-                    <button style="background: #0f172a; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;" onclick="apiAddToCart({user_id}, {p['product_id']}).then(() => {{ if(typeof showToast === 'function') showToast('Added to Cart!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }})">Add to Cart</button>
+                    <button style="background: #0f172a; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;" onclick="widgetAddToCart({p['product_id']})">Add to Cart</button>
                 </div>
             </div>
             """
         html += "</div>"
         return html
-    except Exception as e: return f"Error retrieving products: {str(e)}"
-    finally: cursor.close(); close_db_connection(conn)
+    except Exception as e: 
+        return f"Error retrieving products: {str(e)}"
+    finally: 
+        cursor.close()
+        close_db_connection(conn)
 
 # ==========================================
 # 2. COMPARISONS
 # ==========================================
 def compare_products(product_a: str, product_b: str, user_id: int) -> str:
     conn = get_db_connection()
-    if not conn: return "Database connection failed."
+    if not conn: 
+        return "Database connection failed."
     try:
         cursor = conn.cursor(dictionary=True)
         results = []
         for term in [product_a, product_b]:
             cursor.execute("SELECT * FROM products WHERE product_name LIKE %s OR description LIKE %s LIMIT 1", (f"%{term}%", f"%{term}%"))
             p = cursor.fetchone()
-            if p: results.append(p)
+            if p: 
+                results.append(p)
                 
-        if len(results) < 2: return f"I couldn't find exact matches to compare '{product_a}' and '{product_b}'."
+        if len(results) < 2: 
+            return f"I couldn't find exact matches to compare '{product_a}' and '{product_b}'."
 
         html = "<div style='display: flex; gap: 10px; overflow-x: auto; padding: 5px 0; margin-top: 5px;'>"
         for p in results:
@@ -91,13 +114,16 @@ def compare_products(product_a: str, product_b: str, user_id: int) -> str:
                 <h6 style="font-size: 0.85rem; font-weight: bold; margin: 0 0 5px 0; height: 32px; overflow: hidden;">{p['product_name']}</h6>
                 <p style="color: #6366f1; font-weight: 800; font-size: 1.1rem; margin: 0 0 8px 0;">₹{p['price']}</p>
                 <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 10px;">{p.get('category_name', 'Unknown')}</div>
-                <button style="background: #0f172a; color: white; border: none; padding: 6px 10px; border-radius: 6px; width: 100%; font-size: 0.8rem; cursor: pointer;" onclick="apiAddToCart({user_id}, {p['product_id']}).then(() => {{ if(typeof showToast === 'function') showToast('Added to Cart!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }})">Add to Cart</button>
+                <button style="background: #0f172a; color: white; border: none; padding: 6px 10px; border-radius: 6px; width: 100%; font-size: 0.8rem; cursor: pointer;" onclick="widgetAddToCart({p['product_id']})">Add to Cart</button>
             </div>
             """
         html += "</div>"
         return html
-    except Exception as e: return f"Error during comparison: {str(e)}"
-    finally: cursor.close(); close_db_connection(conn)
+    except Exception as e: 
+        return f"Error during comparison: {str(e)}"
+    finally: 
+        cursor.close()
+        close_db_connection(conn)
 
 # ==========================================
 # 3. DEEP PRODUCT DETAILS
@@ -107,8 +133,11 @@ def get_product_details(product_name: str, user_id: int) -> str:
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
     p = cursor.fetchone()
-    cursor.close(); close_db_connection(conn)
-    if not p: return f"I couldn't find a product matching '{product_name}' in our catalog."
+    cursor.close()
+    close_db_connection(conn)
+    
+    if not p: 
+        return f"I couldn't find a product matching '{product_name}' in our catalog."
     
     img = p.get('image_url', '')
     if not img or not str(img).startswith('http'):
@@ -122,17 +151,59 @@ def get_product_details(product_name: str, user_id: int) -> str:
         <p style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 12px; line-height: 1.4;">{p.get('description', 'A premium product from AI Store.')}</p>
         <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 12px;">
             <span style="font-weight: 900; color: #6366f1; font-size: 1.2rem;">₹{p['price']}</span>
-            <button style="background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;" onclick="apiAddToCart({user_id}, {p['product_id']}).then(() => {{ if(typeof showToast === 'function') showToast('Added!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }})">Buy Now</button>
+            <button style="background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;" onclick="widgetAddToCart({p['product_id']})">Buy Now</button>
         </div>
     </div>
     """
     return html
 
 # ==========================================
-# 4. FULL ORDER HISTORY
+# 4. RESTORED: FIND CHEAPER ALTERNATIVES 
+# ==========================================
+def find_cheaper_alternative(product_name: str, user_id: int) -> str:
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT price, category_name FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
+    target = cursor.fetchone()
+    
+    if not target: 
+        cursor.close()
+        close_db_connection(conn)
+        return "I couldn't find the original product to compare against."
+
+    cursor.execute("SELECT * FROM products WHERE category_name = %s AND price < %s ORDER BY price DESC LIMIT 3", (target['category_name'], target['price']))
+    alts = cursor.fetchall()
+    cursor.close()
+    close_db_connection(conn)
+    
+    if not alts: 
+        return f"There are no cheaper alternatives in the {target['category_name']} category right now."
+    
+    html = "<p style='margin-bottom: 10px; font-size: 0.9rem;'>Here are some budget-friendly alternatives:</p><div style='display:flex; flex-direction:column; gap:10px;'>"
+    for p in alts:
+        img = p.get('image_url', '')
+        if not img or not str(img).startswith('http'):
+            img = f"https://ui-avatars.com/api/?name={urllib.parse.quote(str(p.get('product_name', 'Item')))}&background=random&color=fff&size=200"
+        html += f"""
+        <div style="display: flex; gap: 12px; padding: 10px; background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.05); border-radius: 12px; align-items: center;">
+            <img src="{img}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">
+            <div style="flex: 1;">
+                <h6 style="font-weight: 700; font-size: 0.9rem; margin: 0 0 4px 0;">{p['product_name']}</h6>
+                <div style="font-weight: 800; color: #16a34a; font-size: 1.05rem; margin-bottom: 6px;">₹{p['price']}</div>
+                <button style="background: #0f172a; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;" onclick="widgetAddToCart({p['product_id']})">Add to Cart</button>
+            </div>
+        </div>
+        """
+    html += "</div>"
+    return html
+
+# ==========================================
+# 5. FULL ORDER HISTORY
 # ==========================================
 def get_user_order_history(user_id: int) -> str:
-    if user_id == 0: return "Please log in to view your order history."
+    if user_id == 0: 
+        return "Please log in to view your order history."
+        
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("""
@@ -140,9 +211,11 @@ def get_user_order_history(user_id: int) -> str:
         FROM orders WHERE user_id = %s ORDER BY order_date DESC LIMIT 3
     """, (user_id,))
     orders = cursor.fetchall()
-    cursor.close(); close_db_connection(conn)
+    cursor.close()
+    close_db_connection(conn)
     
-    if not orders: return "You have no recent orders on this account."
+    if not orders: 
+        return "You have no recent orders on this account."
     
     html = "<div style='display:flex; flex-direction:column; gap:8px; margin-top:5px;'>"
     for o in orders:
@@ -160,17 +233,21 @@ def get_user_order_history(user_id: int) -> str:
     return html
 
 # ==========================================
-# 5. NEW: ADD ITEM TO CART (The missing piece)
+# 6. ADD ITEM TO CART 
 # ==========================================
 def add_item_to_cart(user_id: int, product_name: str, quantity: int) -> str:
-    if user_id == 0: return "Please log in to add items to your cart."
+    if user_id == 0: 
+        return "Please log in to add items to your cart."
+        
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     cursor.execute("SELECT product_id, product_name, price FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
     product = cursor.fetchone()
+    
     if not product:
-        cursor.close(); close_db_connection(conn)
+        cursor.close()
+        close_db_connection(conn)
         return f"I couldn't find '{product_name}' in our catalog."
         
     cursor.execute("SELECT quantity FROM cart WHERE user_id = %s AND product_id = %s", (user_id, product['product_id']))
@@ -181,58 +258,142 @@ def add_item_to_cart(user_id: int, product_name: str, quantity: int) -> str:
     else:
         cursor.execute("INSERT INTO cart (user_id, product_id, quantity) VALUES (%s, %s, %s)", (user_id, product['product_id'], quantity))
         
-    conn.commit(); cursor.close(); close_db_connection(conn)
+    conn.commit()
+    cursor.close()
+    close_db_connection(conn)
     return f"✅ Successfully added **{quantity}x {product['product_name']}** to your cart!<br><br><a href='cart.html' style='color: #6366f1; font-weight: bold; text-decoration: none;'>🛒 Click here to go to Checkout</a>"
 
 # ==========================================
-# 6, 7, 8. EXISTING ACTIONS
+# 7, 8, 9, 10. ORDER ACTIONS
 # ==========================================
 def place_order(user_id: int, product_name: str, quantity: int) -> str:
-    if user_id == 0: return "You must be logged in to place an order."
+    if user_id == 0: 
+        return "You must be logged in to place an order."
+        
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT product_id, price, stock FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
     product = cursor.fetchone()
-    if not product: return "Sorry, I couldn't find that product to order."
+    
+    if not product: 
+        return "Sorry, I couldn't find that product to order."
+        
     total = product['price'] * quantity
     cursor.execute("INSERT INTO orders (user_id, total_amount, status) VALUES (%s, %s, 'pending')", (user_id, total))
     order_id = cursor.lastrowid
+    
     cursor.execute("INSERT INTO order_items (order_id, product_id, product_name, price, quantity) VALUES (%s, %s, %s, %s, %s)", (order_id, product['product_id'], product_name, product['price'], quantity))
     cursor.execute("UPDATE products SET stock = stock - %s WHERE product_id = %s", (quantity, product['product_id']))
-    conn.commit(); cursor.close(); close_db_connection(conn)
+    
+    conn.commit()
+    cursor.close()
+    close_db_connection(conn)
     return f"Success! Order #{order_id} has been placed."
 
 def check_order_status(user_id: int, order_id: int) -> str:
-    if user_id == 0: return "Please log in to track orders."
+    if user_id == 0: 
+        return "Please log in to track orders."
+        
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT order_id, total_amount, status FROM orders WHERE order_id = %s AND user_id = %s", (order_id, user_id))
     order = cursor.fetchone()
-    cursor.close(); close_db_connection(conn)
-    return f"Order #{order_id} is currently **{order['status'].upper()}**." if order else "I couldn't find an order with that ID."
+    
+    cursor.close()
+    close_db_connection(conn)
+    
+    if order:
+        return f"Order #{order_id} is currently **{order['status'].upper()}**." 
+    else:
+        return "I couldn't find an order with that ID."
+
+def modify_order(user_id: int, order_id: int, product_name: str, new_quantity: int) -> str:
+    if user_id == 0: 
+        return "Please log in to modify orders."
+    if new_quantity < 0: 
+        return "Quantity cannot be less than zero."
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute("SELECT status FROM orders WHERE order_id = %s AND user_id = %s", (order_id, user_id))
+        order = cursor.fetchone()
+        
+        if not order: 
+            return f"Order #{order_id} not found on your account."
+        if order['status'] != 'pending': 
+            return f"Cannot modify Order #{order_id} because it is already {order['status']}."
+            
+        cursor.execute("SELECT * FROM order_items WHERE order_id = %s AND product_name LIKE %s", (order_id, f"%{product_name}%"))
+        item = cursor.fetchone()
+        
+        if not item: 
+            return f"I couldn't find '{product_name}' in Order #{order_id}."
+            
+        old_quantity = item['quantity']
+        qty_diff = new_quantity - old_quantity
+        
+        if new_quantity == 0:
+            cursor.execute("DELETE FROM order_items WHERE order_id = %s AND product_id = %s", (order_id, item['product_id']))
+        else:
+            cursor.execute("SELECT stock FROM products WHERE product_id = %s", (item['product_id'],))
+            product_data = cursor.fetchone()
+            
+            if qty_diff > 0 and product_data['stock'] < qty_diff:
+                return f"Not enough stock to increase. Only {product_data['stock']} left in warehouse."
+            
+            cursor.execute("UPDATE order_items SET quantity = %s WHERE order_id = %s AND product_id = %s", (new_quantity, order_id, item['product_id']))
+            
+        cursor.execute("UPDATE products SET stock = stock - %s WHERE product_id = %s", (qty_diff, item['product_id']))
+        cursor.execute("SELECT SUM(price * quantity) as new_total FROM order_items WHERE order_id = %s", (order_id,))
+        new_total_data = cursor.fetchone()
+        new_total = new_total_data['new_total'] if new_total_data['new_total'] else 0
+        
+        if new_total == 0:
+            cursor.execute("UPDATE orders SET status = 'cancelled', total_amount = 0 WHERE order_id = %s", (order_id,))
+            conn.commit()
+            return f"Item removed. Since the order is now empty, Order #{order_id} has been automatically cancelled."
+            
+        cursor.execute("UPDATE orders SET total_amount = %s WHERE order_id = %s", (new_total, order_id))
+        conn.commit()
+        return f"Success! Order #{order_id} updated. {product_name} quantity is now {new_quantity}. New Total: ₹{new_total}."
+    
+    except Exception as e:
+        return f"Error modifying order: {str(e)}"
+    finally:
+        cursor.close()
+        close_db_connection(conn)
 
 def cancel_order(user_id: int, order_id: int) -> str:
-    if user_id == 0: return "Please log in to cancel orders."
+    if user_id == 0: 
+        return "Please log in to cancel orders."
+        
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT status FROM orders WHERE order_id = %s AND user_id = %s", (order_id, user_id))
     result = cursor.fetchone()
-    if not result: return "I couldn't find an order with that ID."
+    
+    if not result: 
+        return "I couldn't find an order with that ID."
+        
     cursor.execute("UPDATE orders SET status = 'cancelled' WHERE order_id = %s", (order_id,))
-    conn.commit(); cursor.close(); close_db_connection(conn)
+    conn.commit()
+    cursor.close()
+    close_db_connection(conn)
     return f"Order #{order_id} has been successfully cancelled."
-
 
 # ==========================================
 # MAIN AI PROCESSING ENGINE
 # ==========================================
 @router.post("")
 async def process_chat(request: ChatRequest):
-    if not client: return {"response": "AI configuration error. Missing API Key."}
+    if not client: 
+        return {"response": "AI configuration error. Missing API Key."}
+        
     try:
         safe_user_id = request.user_id if request.user_id else 0
 
-        # SYSTEM PROMPT FIX: Instructed to be extremely friendly and conversational.
         system_prompt = """You are an elite, highly knowledgeable AI shopping assistant for AI Store.
         
         CRITICAL RULES:
@@ -246,10 +407,12 @@ async def process_chat(request: ChatRequest):
             {"type": "function", "function": {"name": "get_product_recommendation", "description": "Search and recommend products.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
             {"type": "function", "function": {"name": "compare_products", "description": "Compare two products.", "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}}},
             {"type": "function", "function": {"name": "get_product_details", "description": "Get deep specs for a single product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
+            {"type": "function", "function": {"name": "find_cheaper_alternative", "description": "Find cheaper alternatives to a product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
             {"type": "function", "function": {"name": "get_user_order_history", "description": "Get recent orders for the user.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}}, "required": ["user_id"]}}},
             {"type": "function", "function": {"name": "add_item_to_cart", "description": "Add an item to the shopping cart WITHOUT checking out.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["user_id", "product_name", "quantity"]}}},
             {"type": "function", "function": {"name": "place_order", "description": "Instantly purchase an item.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["user_id", "product_name", "quantity"]}}},
             {"type": "function", "function": {"name": "check_order_status", "description": "Check status by specific Order ID.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}},
+            {"type": "function", "function": {"name": "modify_order", "description": "Modify the quantity of a product in an existing order.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}, "product_name": {"type": "string"}, "new_quantity": {"type": "integer"}}, "required": ["user_id", "order_id", "product_name", "new_quantity"]}}},
             {"type": "function", "function": {"name": "cancel_order", "description": "Cancel a specific order.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}}
         ]
 
@@ -262,15 +425,28 @@ async def process_chat(request: ChatRequest):
             func_name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
             
-            if func_name == "get_product_recommendation": result = get_product_recommendation(args.get("query", "featured"), safe_user_id)
-            elif func_name == "compare_products": result = compare_products(args["product_a"], args["product_b"], safe_user_id)
-            elif func_name == "get_product_details": result = get_product_details(args["product_name"], safe_user_id)
-            elif func_name == "get_user_order_history": result = get_user_order_history(args.get("user_id", safe_user_id))
-            elif func_name == "add_item_to_cart": result = add_item_to_cart(args.get("user_id", safe_user_id), args["product_name"], args.get("quantity", 1))
-            elif func_name == "place_order": result = place_order(args.get("user_id", safe_user_id), args["product_name"], args.get("quantity", 1))
-            elif func_name == "check_order_status": result = check_order_status(args.get("user_id", safe_user_id), args["order_id"])
-            elif func_name == "cancel_order": result = cancel_order(args.get("user_id", safe_user_id), args["order_id"])
-            else: result = "I'm sorry, I couldn't perform that action."
+            if func_name == "get_product_recommendation": 
+                result = get_product_recommendation(args.get("query", "featured"), safe_user_id)
+            elif func_name == "compare_products": 
+                result = compare_products(args["product_a"], args["product_b"], safe_user_id)
+            elif func_name == "get_product_details": 
+                result = get_product_details(args["product_name"], safe_user_id)
+            elif func_name == "find_cheaper_alternative": 
+                result = find_cheaper_alternative(args["product_name"], safe_user_id)
+            elif func_name == "get_user_order_history": 
+                result = get_user_order_history(args.get("user_id", safe_user_id))
+            elif func_name == "add_item_to_cart": 
+                result = add_item_to_cart(args.get("user_id", safe_user_id), args["product_name"], args.get("quantity", 1))
+            elif func_name == "place_order": 
+                result = place_order(args.get("user_id", safe_user_id), args["product_name"], args.get("quantity", 1))
+            elif func_name == "check_order_status": 
+                result = check_order_status(args.get("user_id", safe_user_id), args["order_id"])
+            elif func_name == "modify_order": 
+                result = modify_order(args.get("user_id", safe_user_id), args["order_id"], args["product_name"], args["new_quantity"])
+            elif func_name == "cancel_order": 
+                result = cancel_order(args.get("user_id", safe_user_id), args["order_id"])
+            else: 
+                result = "I'm sorry, I couldn't perform that action."
             
             return {"response": result}
         

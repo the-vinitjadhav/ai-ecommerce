@@ -1,40 +1,60 @@
+// ============================================================
+// FILE: frontend/js/profile.js
+// PURPOSE: Self-Contained Profile Dashboard Logic
+// ============================================================
+
 document.addEventListener('DOMContentLoaded', async function() {
     const userId = localStorage.getItem('userId');
-    const role = localStorage.getItem('role'); // Grab the role
-    
-    // Security check
+    const role = localStorage.getItem('role');
+
+    // 1. Security check: Kick out unauthenticated users
     if (!userId) {
-        if (typeof showToast === 'function') showToast('Please login to view your profile.', 'error');
-        setTimeout(() => window.location.href = 'login.html', 1500);
+        alert('Please login to view your profile.');
+        window.location.href = 'login.html';
         return;
     }
 
-    // Unhide dashboard button if user is an admin
-    const adminProfLink = document.getElementById('admin-profile-link');
-    if (adminProfLink && role === 'admin') {
-        adminProfLink.style.display = 'block';
+    // 2. Unhide Admin link if applicable
+    const adminLink = document.getElementById('admin-link');
+    if (adminLink && role === 'admin') {
+        adminLink.style.display = 'block';
     }
 
-    // Load Data
+    // 3. Load all data securely
     await loadUserProfile(userId);
     await loadUserOrders(userId);
 
-    // Bind form submit
+    // 4. Bind the save button
     const profileForm = document.getElementById('profile-form');
     if (profileForm) {
         profileForm.addEventListener('submit', handleProfileUpdate);
     }
 });
+
+// ============================================================
+// DATA FETCHING FUNCTIONS
+// ============================================================
 async function loadUserProfile(userId) {
     try {
-        const user = await getUserProfile(userId);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/auth/profile/${userId}`, {
+            headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
         
-        // Update Sidebar
-        document.getElementById('sidebar-name').textContent = user.name;
-        document.getElementById('sidebar-email').textContent = user.email;
-        document.getElementById('profile-avatar').textContent = user.name.charAt(0).toUpperCase();
+        if (!response.ok) throw new Error("Failed to fetch profile");
+        
+        const user = await response.json();
+        if (user.error) throw new Error(user.error);
 
-        // Populate Form
+        // Safeguard against missing names
+        const safeName = user.name || 'Awesome Customer';
+
+        // Update Sidebar Elements
+        document.getElementById('sidebar-name').textContent = safeName;
+        document.getElementById('sidebar-email').textContent = user.email || 'No email on file';
+        document.getElementById('profile-avatar').textContent = safeName.charAt(0).toUpperCase();
+
+        // Populate Form Inputs
         document.getElementById('prof-name').value = user.name || '';
         document.getElementById('prof-email').value = user.email || '';
         document.getElementById('prof-phone').value = user.phone || '';
@@ -43,45 +63,34 @@ async function loadUserProfile(userId) {
         document.getElementById('prof-pincode').value = user.pincode || '';
 
     } catch (error) {
-        console.error("Failed to load profile:", error);
-    }
-}
-
-async function handleProfileUpdate(e) {
-    e.preventDefault();
-    const userId = localStorage.getItem('userId');
-
-    const profileData = {
-        name: document.getElementById('prof-name').value,
-        phone: document.getElementById('prof-phone').value,
-        address: document.getElementById('prof-address').value,
-        city: document.getElementById('prof-city').value,
-        pincode: document.getElementById('prof-pincode').value
-    };
-
-    try {
-        await updateUserProfile(userId, profileData);
-        if (typeof showToast === 'function') showToast('Profile updated successfully!', 'success');
-        
-        // Update the sidebar name instantly
-        document.getElementById('sidebar-name').textContent = profileData.name;
-        localStorage.setItem('userName', profileData.name);
-    } catch (error) {
-        if (typeof showToast === 'function') showToast('Failed to update profile.', 'error');
+        console.error("Profile Load Error:", error);
+        document.getElementById('sidebar-name').textContent = "Error loading profile";
+        document.getElementById('sidebar-email').textContent = "Please refresh the page";
     }
 }
 
 async function loadUserOrders(userId) {
     try {
-        const orders = await getUserOrders(userId);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/orders/${userId}`, {
+            headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+        
+        if (!response.ok) throw new Error("Failed to fetch orders");
+        
+        const orders = await response.json();
         const tbody = document.getElementById('user-orders-body');
-        tbody.innerHTML = '';
+        tbody.innerHTML = ''; // Clear the "Loading..." text
 
-        if (orders.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">You have no orders yet. Go buy something! 🛒</td></tr>';
+        if (orders.error) throw new Error(orders.error);
+
+        // Handle empty order history gracefully
+        if (!orders || orders.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-5 text-muted">You have no orders yet. Time to go shopping! 🛒</td></tr>';
             return;
         }
 
+        // Generate table rows for each order
         orders.forEach(order => {
             let badgeClass = 'bg-secondary';
             if (order.status === 'delivered') badgeClass = 'bg-success';
@@ -102,12 +111,73 @@ async function loadUserOrders(userId) {
         });
 
     } catch (error) {
-        console.error("Failed to load orders:", error);
-        document.getElementById('user-orders-body').innerHTML = '<tr><td colspan="4" class="text-center text-danger">Failed to load orders.</td></tr>';
+        console.error("Order Load Error:", error);
+        document.getElementById('user-orders-body').innerHTML = '<tr><td colspan="4" class="text-center py-5 text-danger">Failed to load order history. Please try again later.</td></tr>';
     }
 }
 
-function logout() {
+// ============================================================
+// FORM SUBMISSION LOGIC
+// ============================================================
+async function handleProfileUpdate(e) {
+    e.preventDefault();
+    const userId = localStorage.getItem('userId');
+    const token = localStorage.getItem('token');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+
+    // Gather data from form
+    const profileData = {
+        name: document.getElementById('prof-name').value.trim(),
+        phone: document.getElementById('prof-phone').value.trim(),
+        address: document.getElementById('prof-address').value.trim(),
+        city: document.getElementById('prof-city').value.trim(),
+        pincode: document.getElementById('prof-pincode').value.trim()
+    };
+
+    // UI Feedback: Show saving state
+    const originalBtnText = submitBtn.textContent;
+    submitBtn.textContent = 'Saving...';
+    submitBtn.disabled = true;
+
+    try {
+        const response = await fetch(`/api/auth/profile/${userId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : ''
+            },
+            body: JSON.stringify(profileData)
+        });
+        
+        if (!response.ok) throw new Error("Failed to update profile");
+        
+        // Show success notification
+        if (typeof showToast === 'function') showToast('Profile updated successfully!', 'success');
+        else alert('Profile updated successfully!');
+        
+        // Instantly update the sidebar visually so the user doesn't have to refresh
+        const safeName = profileData.name || 'User';
+        document.getElementById('sidebar-name').textContent = safeName;
+        document.getElementById('profile-avatar').textContent = safeName.charAt(0).toUpperCase();
+        
+        // Update local storage so the navbar uses the new name
+        localStorage.setItem('userName', safeName);
+
+    } catch (error) {
+        console.error('Update Error:', error);
+        if (typeof showToast === 'function') showToast('Failed to update profile.', 'error');
+        else alert('Failed to save changes. Please try again.');
+    } finally {
+        // Restore button state
+        submitBtn.textContent = originalBtnText;
+        submitBtn.disabled = false;
+    }
+}
+
+// ============================================================
+// GLOBAL LOGOUT
+// ============================================================
+window.logout = function() {
     localStorage.clear();
     window.location.href = 'index.html';
-}
+};
