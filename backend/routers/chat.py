@@ -13,7 +13,7 @@ api_key = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=api_key) if api_key else None
 
 # ==========================================
-# 1. RECOMMENDATIONS (Python Native UI)
+# 1. RECOMMENDATIONS
 # ==========================================
 def get_product_recommendation(query: str, user_id: int) -> str:
     conn = get_db_connection()
@@ -37,15 +37,11 @@ def get_product_recommendation(query: str, user_id: int) -> str:
     try:
         cursor.execute(sql, params)
         products = cursor.fetchall()
-        
-        # SMART FALLBACK: If nothing is found, return random items.
         if not products:
             cursor.execute("SELECT * FROM products ORDER BY RAND() LIMIT 4")
             products = cursor.fetchall()
-
         if not products: return "Sorry, our store catalog is currently empty!"
 
-        # PYTHON BUILDS THE UI DIRECTLY - IMPOSSIBLE TO HALLUCINATE
         html = "<div style='display:flex; flex-direction:column; gap:10px; margin-top:5px;'>"
         for p in products:
             img = p.get('image_url', '')
@@ -133,44 +129,7 @@ def get_product_details(product_name: str, user_id: int) -> str:
     return html
 
 # ==========================================
-# 4. FIND CHEAPER ALTERNATIVES
-# ==========================================
-def find_cheaper_alternative(product_name: str, user_id: int) -> str:
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT price, category_name FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
-    target = cursor.fetchone()
-    
-    if not target: 
-        cursor.close(); close_db_connection(conn)
-        return "I couldn't find the original product to compare against."
-
-    cursor.execute("SELECT * FROM products WHERE category_name = %s AND price < %s ORDER BY price DESC LIMIT 3", (target['category_name'], target['price']))
-    alts = cursor.fetchall()
-    cursor.close(); close_db_connection(conn)
-    
-    if not alts: return f"There are no cheaper alternatives in the {target['category_name']} category right now."
-    
-    html = "<p style='margin-bottom: 10px; font-size: 0.9rem;'>Here are some budget-friendly alternatives:</p><div style='display:flex; flex-direction:column; gap:10px;'>"
-    for p in alts:
-        img = p.get('image_url', '')
-        if not img or not str(img).startswith('http'):
-            img = f"https://ui-avatars.com/api/?name={urllib.parse.quote(str(p.get('product_name', 'Item')))}&background=random&color=fff&size=200"
-        html += f"""
-        <div style="display: flex; gap: 12px; padding: 10px; background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.05); border-radius: 12px; align-items: center;">
-            <img src="{img}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">
-            <div style="flex: 1;">
-                <h6 style="font-weight: 700; font-size: 0.9rem; margin: 0 0 4px 0;">{p['product_name']}</h6>
-                <div style="font-weight: 800; color: #16a34a; font-size: 1.05rem; margin-bottom: 6px;">₹{p['price']}</div>
-                <button style="background: #0f172a; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;" onclick="apiAddToCart({user_id}, {p['product_id']}).then(() => {{ if(typeof showToast === 'function') showToast('Added to Cart!', 'success'); if(typeof updateCartCount === 'function') updateCartCount(); }})">Add to Cart</button>
-            </div>
-        </div>
-        """
-    html += "</div>"
-    return html
-
-# ==========================================
-# 5. FULL ORDER HISTORY
+# 4. FULL ORDER HISTORY
 # ==========================================
 def get_user_order_history(user_id: int) -> str:
     if user_id == 0: return "Please log in to view your order history."
@@ -201,13 +160,38 @@ def get_user_order_history(user_id: int) -> str:
     return html
 
 # ==========================================
-# 6, 7, 8. EXISTING ORDER ACTIONS
+# 5. NEW: ADD ITEM TO CART (The missing piece)
+# ==========================================
+def add_item_to_cart(user_id: int, product_name: str, quantity: int) -> str:
+    if user_id == 0: return "Please log in to add items to your cart."
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT product_id, product_name, price FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
+    product = cursor.fetchone()
+    if not product:
+        cursor.close(); close_db_connection(conn)
+        return f"I couldn't find '{product_name}' in our catalog."
+        
+    cursor.execute("SELECT quantity FROM cart WHERE user_id = %s AND product_id = %s", (user_id, product['product_id']))
+    existing = cursor.fetchone()
+    
+    if existing:
+        cursor.execute("UPDATE cart SET quantity = quantity + %s WHERE user_id = %s AND product_id = %s", (quantity, user_id, product['product_id']))
+    else:
+        cursor.execute("INSERT INTO cart (user_id, product_id, quantity) VALUES (%s, %s, %s)", (user_id, product['product_id'], quantity))
+        
+    conn.commit(); cursor.close(); close_db_connection(conn)
+    return f"✅ Successfully added **{quantity}x {product['product_name']}** to your cart!<br><br><a href='cart.html' style='color: #6366f1; font-weight: bold; text-decoration: none;'>🛒 Click here to go to Checkout</a>"
+
+# ==========================================
+# 6, 7, 8. EXISTING ACTIONS
 # ==========================================
 def place_order(user_id: int, product_name: str, quantity: int) -> str:
     if user_id == 0: return "You must be logged in to place an order."
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT product_id, price, stock FROM products WHERE product_name LIKE %s", (f"%{product_name}%",))
+    cursor.execute("SELECT product_id, price, stock FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
     product = cursor.fetchone()
     if not product: return "Sorry, I couldn't find that product to order."
     total = product['price'] * quantity
@@ -240,7 +224,7 @@ def cancel_order(user_id: int, order_id: int) -> str:
 
 
 # ==========================================
-# MAIN AI PROCESSING ENGINE (SINGLE-STAGE)
+# MAIN AI PROCESSING ENGINE
 # ==========================================
 @router.post("")
 async def process_chat(request: ChatRequest):
@@ -248,32 +232,31 @@ async def process_chat(request: ChatRequest):
     try:
         safe_user_id = request.user_id if request.user_id else 0
 
-        # AI IS ONLY USED TO ROUTE THE INTENT. IT NEVER WRITES HTML NOW.
-        system_prompt = """You are an elite AI shopping assistant for AI Store.
-        Your ONLY job is to chat naturally OR trigger the correct tool.
+        # SYSTEM PROMPT FIX: Instructed to be extremely friendly and conversational.
+        system_prompt = """You are an elite, highly knowledgeable AI shopping assistant for AI Store.
         
         CRITICAL RULES:
-        1. NO HTML: You are STRICTLY FORBIDDEN from writing HTML or UI code. Python handles it.
-        2. NO GUESSING: If the user asks to "compare products" but does not give you TWO specific names, DO NOT guess (e.g. do not guess "Product 1"). Ask them: "Which two products would you like me to compare?"
-        3. BE CONCISE: Answer conversationally and briefly."""
+        1. ANSWERING QUERIES: If a user asks general questions about products, store policies, technology, or requires help deciding, answer them warmly, fully, and conversationally. Do not be robotic.
+        2. ADD TO CART VS ORDER: If a user asks to "add [item] to my cart", use the 'add_item_to_cart' tool. DO NOT use 'place_order' unless they explicitly say "buy", "purchase", or "place order now".
+        3. TRACKING: If a user asks "where is my order" but does NOT give you an Order ID, use 'get_user_order_history' instead of 'check_order_status'.
+        4. NO HTML: Never write HTML. Python handles UI rendering.
+        """
 
         tools = [
-            {"type": "function", "function": {"name": "get_product_recommendation", "description": "Recommend products.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+            {"type": "function", "function": {"name": "get_product_recommendation", "description": "Search and recommend products.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
             {"type": "function", "function": {"name": "compare_products", "description": "Compare two products.", "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}}},
             {"type": "function", "function": {"name": "get_product_details", "description": "Get deep specs for a single product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
-            {"type": "function", "function": {"name": "find_cheaper_alternative", "description": "Find cheaper alternatives.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
-            {"type": "function", "function": {"name": "get_user_order_history", "description": "Get recent orders.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}}, "required": ["user_id"]}}},
-            {"type": "function", "function": {"name": "place_order", "description": "Place an order.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["user_id", "product_name", "quantity"]}}},
-            {"type": "function", "function": {"name": "check_order_status", "description": "Check order status.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}},
-            {"type": "function", "function": {"name": "cancel_order", "description": "Cancel an order.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}}
+            {"type": "function", "function": {"name": "get_user_order_history", "description": "Get recent orders for the user.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}}, "required": ["user_id"]}}},
+            {"type": "function", "function": {"name": "add_item_to_cart", "description": "Add an item to the shopping cart WITHOUT checking out.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["user_id", "product_name", "quantity"]}}},
+            {"type": "function", "function": {"name": "place_order", "description": "Instantly purchase an item.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["user_id", "product_name", "quantity"]}}},
+            {"type": "function", "function": {"name": "check_order_status", "description": "Check status by specific Order ID.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}},
+            {"type": "function", "function": {"name": "cancel_order", "description": "Cancel a specific order.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}}
         ]
 
-        # 1 Single Call to Groq
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": request.message}]
-        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, temperature=0.1, tools=tools)
+        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, temperature=0.2, tools=tools)
         response_message = response.choices[0].message
 
-        # If Groq decides a tool is needed, PYTHON executes it and returns the HTML directly! No second AI call!
         if response_message.tool_calls:
             tool_call = response_message.tool_calls[0]
             func_name = tool_call.function.name
@@ -282,17 +265,15 @@ async def process_chat(request: ChatRequest):
             if func_name == "get_product_recommendation": result = get_product_recommendation(args.get("query", "featured"), safe_user_id)
             elif func_name == "compare_products": result = compare_products(args["product_a"], args["product_b"], safe_user_id)
             elif func_name == "get_product_details": result = get_product_details(args["product_name"], safe_user_id)
-            elif func_name == "find_cheaper_alternative": result = find_cheaper_alternative(args["product_name"], safe_user_id)
             elif func_name == "get_user_order_history": result = get_user_order_history(args.get("user_id", safe_user_id))
+            elif func_name == "add_item_to_cart": result = add_item_to_cart(args.get("user_id", safe_user_id), args["product_name"], args.get("quantity", 1))
             elif func_name == "place_order": result = place_order(args.get("user_id", safe_user_id), args["product_name"], args.get("quantity", 1))
             elif func_name == "check_order_status": result = check_order_status(args.get("user_id", safe_user_id), args["order_id"])
             elif func_name == "cancel_order": result = cancel_order(args.get("user_id", safe_user_id), args["order_id"])
             else: result = "I'm sorry, I couldn't perform that action."
             
-            # Send the perfectly formatted Python HTML straight back to the widget!
             return {"response": result}
         
-        # If Groq just wants to say "Hello!", send the text back.
         else:
             return {"response": response_message.content}
             
