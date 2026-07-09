@@ -13,7 +13,7 @@ api_key = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=api_key) if api_key else None
 
 # ==========================================
-# 1. RECOMMENDATIONS
+# 1. RECOMMENDATIONS (WITH SMART FALLBACK)
 # ==========================================
 def get_product_recommendation(query: str) -> str:
     conn = get_db_connection()
@@ -31,12 +31,18 @@ def get_product_recommendation(query: str) -> str:
     elif price_limit and detected_category: sql = "SELECT * FROM products WHERE price <= %s AND category_name = %s LIMIT 5"; params = (price_limit, detected_category)
     elif price_limit: sql = "SELECT * FROM products WHERE price <= %s LIMIT 5"; params = (price_limit,)
     elif detected_category: sql = "SELECT * FROM products WHERE category_name = %s LIMIT 5"; params = (detected_category,)
-    elif query.lower().strip() in ["", "featured", "all", "explore", "recommend"]: sql = "SELECT * FROM products ORDER BY RAND() LIMIT 4"; params = ()
+    elif any(word in query.lower() for word in ["recommend", "explore", "products", "all", "show"]): sql = "SELECT * FROM products ORDER BY RAND() LIMIT 4"; params = ()
     else: sql = "SELECT * FROM products WHERE product_name LIKE %s OR description LIKE %s LIMIT 5"; params = (f"%{query}%", f"%{query}%")
     
     try:
         cursor.execute(sql, params)
         products = cursor.fetchall()
+        
+        # THE FIX: If the search finds NOTHING, fallback to 4 random products so the AI never hallucinates!
+        if not products:
+            cursor.execute("SELECT * FROM products ORDER BY RAND() LIMIT 4")
+            products = cursor.fetchall()
+
         for p in products:
             if 'price' in p and p['price'] is not None: p['price'] = float(p['price'])
             if not p.get('image_url') or not str(p['image_url']).startswith('http'):
@@ -172,12 +178,17 @@ async def process_chat(request: ChatRequest):
         cart_count = request.context.cart_items if request.context else "Unknown"
         safe_user_id = request.user_id if request.user_id else 0
 
-        # THE FIX: Added CURRENT_USER_ID so the AI knows exactly who is talking!
+        # THE FIX: Added Strict Anti-Hallucination Rules
         dynamic_system_prompt = f"""You are an elite AI shopping assistant for AI Store.
         USER CONTEXT: Looking at page: {current_page} | Items in cart: {cart_count} | CURRENT_USER_ID: {safe_user_id}.
         
-        RICH UI CAPABILITIES (CRITICAL):
-        You MUST format your responses using these exact HTML templates when returning data from your tools:
+        CRITICAL ANTI-HALLUCINATION RULES:
+        1. NEVER invent fake products (like "Product 1") or fake prices. 
+        2. ONLY use the HTML templates below if the tool successfully returns real JSON database data.
+        3. You MUST replace all bracketed placeholders (e.g., [product_name], [price], [image_url]) with the EXACT real data from the tool. 
+        4. If the tool returns an error or no data, DO NOT output HTML. Just reply naturally in plain text.
+        
+        RICH UI CAPABILITIES:
         
         1. FOR SINGLE RECOMMENDATIONS & ALTERNATIVES:
         <div style="display: flex; gap: 15px; background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; margin-top: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); max-width: 400px; align-items: center;">
@@ -213,7 +224,6 @@ async def process_chat(request: ChatRequest):
         </div>
         """
 
-        # THE FIX: Every tool now has a strict description so Llama 3 knows exactly how to use it!
         tools = [
             {
                 "type": "function", 
@@ -291,13 +301,12 @@ async def process_chat(request: ChatRequest):
             func_name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
             
-            # ROUTER EXECUTION
             if func_name == "get_product_recommendation": result = get_product_recommendation(args["query"])
             elif func_name == "compare_products": result = compare_products(args["product_a"], args["product_b"])
             elif func_name == "get_product_details": result = get_product_details(args["product_name"])
             elif func_name == "find_cheaper_alternative": result = find_cheaper_alternative(args["product_name"])
             elif func_name == "get_user_order_history": result = get_user_order_history(args.get("user_id", safe_user_id))
-            elif func_name == "place_order": result = place_order(args.get("user_id", safe_user_id), args["product_name"], args["quantity"])
+            elif func_name == "place_order": result = place_order(args.get("user_id", safe_user_id), args["product_name"], args.get("quantity", 1))
             elif func_name == "check_order_status": result = check_order_status(args.get("user_id", safe_user_id), args["order_id"])
             elif func_name == "cancel_order": result = cancel_order(args.get("user_id", safe_user_id), args["order_id"])
             else: result = json.dumps({"error": "Unknown function"})
