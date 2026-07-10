@@ -233,7 +233,62 @@ def get_user_order_history(user_id: int) -> str:
     return html
 
 # ==========================================
-# 6. ADD ITEM TO CART 
+# 6. NEW: VIEW CART CONTENTS
+# ==========================================
+def view_user_cart(user_id: int) -> str:
+    if user_id == 0: 
+        return "Please log in to view your cart."
+        
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT c.quantity, p.product_name, p.price, p.image_url
+        FROM cart c 
+        JOIN products p ON c.product_id = p.product_id
+        WHERE c.user_id = %s
+    """, (user_id,))
+    items = cursor.fetchall()
+    cursor.close()
+    close_db_connection(conn)
+    
+    if not items: 
+        return "Your cart is currently empty. Ask me to recommend some products!"
+        
+    total_cart_value = 0
+    html = "<p style='margin-bottom: 10px; font-size: 0.95rem;'>Here is what's currently in your cart:</p>"
+    html += "<div style='display:flex; flex-direction:column; gap:8px; margin-top:5px;'>"
+    
+    for item in items:
+        img = item.get('image_url', '')
+        if not img or not str(img).startswith('http'):
+            img = f"https://ui-avatars.com/api/?name={urllib.parse.quote(str(item.get('product_name', 'Item')))}&background=random&color=fff&size=200"
+
+        item_total = item['price'] * item['quantity']
+        total_cart_value += item_total
+
+        html += f"""
+        <div style="display: flex; gap: 12px; padding: 10px; background: rgba(255,255,255,0.6); border: 1px solid rgba(0,0,0,0.05); border-radius: 12px; align-items: center;">
+            <img src="{img}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;">
+            <div style="flex: 1;">
+                <h6 style="margin: 0 0 2px 0; font-size: 0.85rem; font-weight: bold;">{item['product_name']}</h6>
+                <div style="font-size: 0.8rem; color: #64748b;">Qty: {item['quantity']} × ₹{item['price']}</div>
+            </div>
+            <div style="font-weight: bold; color: #6366f1; font-size: 0.95rem;">₹{item_total}</div>
+        </div>
+        """
+        
+    html += f"""
+        <div style="margin-top: 8px; padding-top: 12px; border-top: 2px dashed rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: bold; color: #475569;">Cart Total:</span>
+            <span style="font-weight: 900; font-size: 1.15rem; color: #0f172a;">₹{total_cart_value}</span>
+        </div>
+        <a href="cart.html" style="display: block; text-align: center; background: linear-gradient(135deg, #6366f1, #a855f7); color: white; padding: 10px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 10px; box-shadow: 0 4px 10px rgba(99,102,241,0.2);">Proceed to Checkout</a>
+    </div>
+    """
+    return html
+
+# ==========================================
+# 7. ADD ITEM TO CART 
 # ==========================================
 def add_item_to_cart(user_id: int, product_name: str, quantity: int) -> str:
     if user_id == 0: 
@@ -264,7 +319,7 @@ def add_item_to_cart(user_id: int, product_name: str, quantity: int) -> str:
     return f"✅ Successfully added **{quantity}x {product['product_name']}** to your cart!<br><br><a href='cart.html' style='color: #6366f1; font-weight: bold; text-decoration: none;'>🛒 Click here to view Cart</a>"
 
 # ==========================================
-# 7, 8, 9, 10. ORDER ACTIONS
+# 8, 9, 10, 11. ORDER ACTIONS
 # ==========================================
 def place_order(user_id: int, product_name: str, quantity: int) -> str:
     if user_id == 0: 
@@ -400,17 +455,18 @@ async def process_chat(request: ChatRequest):
         CRITICAL RULES:
         1. ANSWERING QUERIES: If a user asks general questions about products, store policies, technology, or requires help deciding, answer them warmly, fully, and conversationally. Do not be robotic.
         2. ADD TO CART VS ORDER: If a user asks to "add [item] to my cart", use the 'add_item_to_cart' tool. DO NOT use 'place_order' unless they explicitly say "buy", "purchase", or "place order now".
-        3. TRACKING: If a user asks "where is my order" but does NOT give you an Order ID, use 'get_user_order_history' instead of 'check_order_status'.
-        4. NO HTML: Never write HTML. Python handles UI rendering.
+        3. CART CONTENTS: If a user asks "what is in my cart" or "view my cart", you MUST use the 'view_user_cart' tool. Do NOT use order history for this.
+        4. TRACKING: If a user asks "where is my order" but does NOT give you an Order ID, use 'get_user_order_history'.
+        5. NO HTML: Never write HTML. Python handles UI rendering.
         """
 
-        # THE FIX: Removed "user_id" from the parameters so the AI cannot invent fake ghost IDs anymore!
         tools = [
             {"type": "function", "function": {"name": "get_product_recommendation", "description": "Search and recommend products.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
             {"type": "function", "function": {"name": "compare_products", "description": "Compare two products.", "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}}},
             {"type": "function", "function": {"name": "get_product_details", "description": "Get deep specs for a single product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
             {"type": "function", "function": {"name": "find_cheaper_alternative", "description": "Find cheaper alternatives to a product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
             {"type": "function", "function": {"name": "get_user_order_history", "description": "Get recent orders for the user.", "parameters": {"type": "object", "properties": {}, "required": []}}},
+            {"type": "function", "function": {"name": "view_user_cart", "description": "View the items currently inside the user's shopping cart.", "parameters": {"type": "object", "properties": {}, "required": []}}},
             {"type": "function", "function": {"name": "add_item_to_cart", "description": "Add an item to the shopping cart WITHOUT checking out.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["product_name", "quantity"]}}},
             {"type": "function", "function": {"name": "place_order", "description": "Instantly purchase an item.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["product_name", "quantity"]}}},
             {"type": "function", "function": {"name": "check_order_status", "description": "Check status by specific Order ID.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer"}}, "required": ["order_id"]}}},
@@ -427,7 +483,6 @@ async def process_chat(request: ChatRequest):
             func_name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
             
-            # THE FIX: We force the function to use `safe_user_id` so it perfectly hits your real cart
             if func_name == "get_product_recommendation": 
                 result = get_product_recommendation(args.get("query", "featured"), safe_user_id)
             elif func_name == "compare_products": 
@@ -438,6 +493,8 @@ async def process_chat(request: ChatRequest):
                 result = find_cheaper_alternative(args.get("product_name", ""), safe_user_id)
             elif func_name == "get_user_order_history": 
                 result = get_user_order_history(safe_user_id)
+            elif func_name == "view_user_cart": 
+                result = view_user_cart(safe_user_id)
             elif func_name == "add_item_to_cart": 
                 result = add_item_to_cart(safe_user_id, args.get("product_name", ""), args.get("quantity", 1))
             elif func_name == "place_order": 

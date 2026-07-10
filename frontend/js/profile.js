@@ -3,6 +3,9 @@
 // PURPOSE: Self-Contained Profile Dashboard Logic
 // ============================================================
 
+// THE FIX: Define the absolute backend URL so fetches don't fail!
+const BACKEND_URL = "https://ai-ecommerce-backend-barh.onrender.com";
+
 document.addEventListener('DOMContentLoaded', async function() {
     const userId = localStorage.getItem('userId');
     const role = localStorage.getItem('role');
@@ -20,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         adminLink.style.display = 'block';
     }
 
-    // 3. Load all data securely
+    // 3. Load all data securely from Render backend
     await loadUserProfile(userId);
     await loadUserOrders(userId);
 
@@ -37,7 +40,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 async function loadUserProfile(userId) {
     try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`/api/auth/profile/${userId}`, {
+        // Fetch using the absolute URL
+        const response = await fetch(`${BACKEND_URL}/api/auth/profile/${userId}`, {
             headers: { 'Authorization': token ? `Bearer ${token}` : '' }
         });
         
@@ -52,7 +56,9 @@ async function loadUserProfile(userId) {
         // Update Sidebar Elements
         document.getElementById('sidebar-name').textContent = safeName;
         document.getElementById('sidebar-email').textContent = user.email || 'No email on file';
-        document.getElementById('profile-avatar').textContent = safeName.charAt(0).toUpperCase();
+        
+        const avatarElem = document.getElementById('profile-avatar');
+        if (avatarElem) avatarElem.textContent = safeName.charAt(0).toUpperCase();
 
         // Populate Form Inputs
         document.getElementById('prof-name').value = user.name || '';
@@ -72,7 +78,7 @@ async function loadUserProfile(userId) {
 async function loadUserOrders(userId) {
     try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`/api/orders/${userId}`, {
+        const response = await fetch(`${BACKEND_URL}/api/orders/${userId}`, {
             headers: { 'Authorization': token ? `Bearer ${token}` : '' }
         });
         
@@ -80,6 +86,8 @@ async function loadUserOrders(userId) {
         
         const orders = await response.json();
         const tbody = document.getElementById('user-orders-body');
+        if (!tbody) return;
+        
         tbody.innerHTML = ''; // Clear the "Loading..." text
 
         if (orders.error) throw new Error(orders.error);
@@ -112,7 +120,8 @@ async function loadUserOrders(userId) {
 
     } catch (error) {
         console.error("Order Load Error:", error);
-        document.getElementById('user-orders-body').innerHTML = '<tr><td colspan="4" class="text-center py-5 text-danger">Failed to load order history. Please try again later.</td></tr>';
+        const tbody = document.getElementById('user-orders-body');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center py-5 text-danger">Failed to load order history. Please try again later.</td></tr>';
     }
 }
 
@@ -140,7 +149,7 @@ async function handleProfileUpdate(e) {
     submitBtn.disabled = true;
 
     try {
-        const response = await fetch(`/api/auth/profile/${userId}`, {
+        const response = await fetch(`${BACKEND_URL}/api/auth/profile/${userId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -158,7 +167,9 @@ async function handleProfileUpdate(e) {
         // Instantly update the sidebar visually so the user doesn't have to refresh
         const safeName = profileData.name || 'User';
         document.getElementById('sidebar-name').textContent = safeName;
-        document.getElementById('profile-avatar').textContent = safeName.charAt(0).toUpperCase();
+        
+        const avatarElem = document.getElementById('profile-avatar');
+        if (avatarElem) avatarElem.textContent = safeName.charAt(0).toUpperCase();
         
         // Update local storage so the navbar uses the new name
         localStorage.setItem('userName', safeName);
