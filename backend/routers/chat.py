@@ -158,7 +158,7 @@ def get_product_details(product_name: str, user_id: int) -> str:
     return html
 
 # ==========================================
-# 4. RESTORED: FIND CHEAPER ALTERNATIVES 
+# 4. FIND CHEAPER ALTERNATIVES 
 # ==========================================
 def find_cheaper_alternative(product_name: str, user_id: int) -> str:
     conn = get_db_connection()
@@ -261,7 +261,7 @@ def add_item_to_cart(user_id: int, product_name: str, quantity: int) -> str:
     conn.commit()
     cursor.close()
     close_db_connection(conn)
-    return f"✅ Successfully added **{quantity}x {product['product_name']}** to your cart!<br><br><a href='cart.html' style='color: #6366f1; font-weight: bold; text-decoration: none;'>🛒 Click here to go to Checkout</a>"
+    return f"✅ Successfully added **{quantity}x {product['product_name']}** to your cart!<br><br><a href='cart.html' style='color: #6366f1; font-weight: bold; text-decoration: none;'>🛒 Click here to view Cart</a>"
 
 # ==========================================
 # 7, 8, 9, 10. ORDER ACTIONS
@@ -392,6 +392,7 @@ async def process_chat(request: ChatRequest):
         return {"response": "AI configuration error. Missing API Key."}
         
     try:
+        # Get the actual ID of the logged-in user from the Request
         safe_user_id = request.user_id if request.user_id else 0
 
         system_prompt = """You are an elite, highly knowledgeable AI shopping assistant for AI Store.
@@ -403,17 +404,18 @@ async def process_chat(request: ChatRequest):
         4. NO HTML: Never write HTML. Python handles UI rendering.
         """
 
+        # THE FIX: Removed "user_id" from the parameters so the AI cannot invent fake ghost IDs anymore!
         tools = [
             {"type": "function", "function": {"name": "get_product_recommendation", "description": "Search and recommend products.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
             {"type": "function", "function": {"name": "compare_products", "description": "Compare two products.", "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}}},
             {"type": "function", "function": {"name": "get_product_details", "description": "Get deep specs for a single product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
             {"type": "function", "function": {"name": "find_cheaper_alternative", "description": "Find cheaper alternatives to a product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
-            {"type": "function", "function": {"name": "get_user_order_history", "description": "Get recent orders for the user.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}}, "required": ["user_id"]}}},
-            {"type": "function", "function": {"name": "add_item_to_cart", "description": "Add an item to the shopping cart WITHOUT checking out.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["user_id", "product_name", "quantity"]}}},
-            {"type": "function", "function": {"name": "place_order", "description": "Instantly purchase an item.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["user_id", "product_name", "quantity"]}}},
-            {"type": "function", "function": {"name": "check_order_status", "description": "Check status by specific Order ID.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}},
-            {"type": "function", "function": {"name": "modify_order", "description": "Modify the quantity of a product in an existing order.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}, "product_name": {"type": "string"}, "new_quantity": {"type": "integer"}}, "required": ["user_id", "order_id", "product_name", "new_quantity"]}}},
-            {"type": "function", "function": {"name": "cancel_order", "description": "Cancel a specific order.", "parameters": {"type": "object", "properties": {"user_id": {"type": "integer"}, "order_id": {"type": "integer"}}, "required": ["user_id", "order_id"]}}}
+            {"type": "function", "function": {"name": "get_user_order_history", "description": "Get recent orders for the user.", "parameters": {"type": "object", "properties": {}, "required": []}}},
+            {"type": "function", "function": {"name": "add_item_to_cart", "description": "Add an item to the shopping cart WITHOUT checking out.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["product_name", "quantity"]}}},
+            {"type": "function", "function": {"name": "place_order", "description": "Instantly purchase an item.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["product_name", "quantity"]}}},
+            {"type": "function", "function": {"name": "check_order_status", "description": "Check status by specific Order ID.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer"}}, "required": ["order_id"]}}},
+            {"type": "function", "function": {"name": "modify_order", "description": "Modify the quantity of a product in an existing order.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer"}, "product_name": {"type": "string"}, "new_quantity": {"type": "integer"}}, "required": ["order_id", "product_name", "new_quantity"]}}},
+            {"type": "function", "function": {"name": "cancel_order", "description": "Cancel a specific order.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer"}}, "required": ["order_id"]}}}
         ]
 
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": request.message}]
@@ -425,26 +427,27 @@ async def process_chat(request: ChatRequest):
             func_name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
             
+            # THE FIX: We force the function to use `safe_user_id` so it perfectly hits your real cart
             if func_name == "get_product_recommendation": 
                 result = get_product_recommendation(args.get("query", "featured"), safe_user_id)
             elif func_name == "compare_products": 
-                result = compare_products(args["product_a"], args["product_b"], safe_user_id)
+                result = compare_products(args.get("product_a", ""), args.get("product_b", ""), safe_user_id)
             elif func_name == "get_product_details": 
-                result = get_product_details(args["product_name"], safe_user_id)
+                result = get_product_details(args.get("product_name", ""), safe_user_id)
             elif func_name == "find_cheaper_alternative": 
-                result = find_cheaper_alternative(args["product_name"], safe_user_id)
+                result = find_cheaper_alternative(args.get("product_name", ""), safe_user_id)
             elif func_name == "get_user_order_history": 
-                result = get_user_order_history(args.get("user_id", safe_user_id))
+                result = get_user_order_history(safe_user_id)
             elif func_name == "add_item_to_cart": 
-                result = add_item_to_cart(args.get("user_id", safe_user_id), args["product_name"], args.get("quantity", 1))
+                result = add_item_to_cart(safe_user_id, args.get("product_name", ""), args.get("quantity", 1))
             elif func_name == "place_order": 
-                result = place_order(args.get("user_id", safe_user_id), args["product_name"], args.get("quantity", 1))
+                result = place_order(safe_user_id, args.get("product_name", ""), args.get("quantity", 1))
             elif func_name == "check_order_status": 
-                result = check_order_status(args.get("user_id", safe_user_id), args["order_id"])
+                result = check_order_status(safe_user_id, args.get("order_id", 0))
             elif func_name == "modify_order": 
-                result = modify_order(args.get("user_id", safe_user_id), args["order_id"], args["product_name"], args["new_quantity"])
+                result = modify_order(safe_user_id, args.get("order_id", 0), args.get("product_name", ""), args.get("new_quantity", 1))
             elif func_name == "cancel_order": 
-                result = cancel_order(args.get("user_id", safe_user_id), args["order_id"])
+                result = cancel_order(safe_user_id, args.get("order_id", 0))
             else: 
                 result = "I'm sorry, I couldn't perform that action."
             
