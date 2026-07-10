@@ -233,7 +233,7 @@ def get_user_order_history(user_id: int) -> str:
     return html
 
 # ==========================================
-# 6. NEW: VIEW CART CONTENTS
+# 6. VIEW CART CONTENTS
 # ==========================================
 def view_user_cart(user_id: int) -> str:
     if user_id == 0: 
@@ -319,7 +319,51 @@ def add_item_to_cart(user_id: int, product_name: str, quantity: int) -> str:
     return f"✅ Successfully added **{quantity}x {product['product_name']}** to your cart!<br><br><a href='cart.html' style='color: #6366f1; font-weight: bold; text-decoration: none;'>🛒 Click here to view Cart</a>"
 
 # ==========================================
-# 8, 9, 10, 11. ORDER ACTIONS
+# 8. NEW: CHECKOUT ENTIRE CART
+# ==========================================
+def checkout_cart(user_id: int) -> str:
+    if user_id == 0: 
+        return "Please log in to checkout your cart."
+        
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute("""
+            SELECT c.product_id, c.quantity, p.price, p.stock, p.product_name
+            FROM cart c JOIN products p ON c.product_id = p.product_id
+            WHERE c.user_id = %s
+        """, (user_id,))
+        cart_items = cursor.fetchall()
+        
+        if not cart_items:
+            return "Your cart is currently empty. There is nothing to order!"
+            
+        for item in cart_items:
+            if item['stock'] < item['quantity']:
+                return f"Insufficient stock for {item['product_name']}. Only {item['stock']} left in warehouse."
+                
+        total = sum(item['quantity'] * item['price'] for item in cart_items)
+        cursor.execute("INSERT INTO orders (user_id, total_amount, status) VALUES (%s, %s, 'pending')", (user_id, total))
+        order_id = cursor.lastrowid
+        
+        for item in cart_items:
+            cursor.execute("INSERT INTO order_items (order_id, product_id, product_name, price, quantity) VALUES (%s, %s, %s, %s, %s)", 
+                           (order_id, item['product_id'], item['product_name'], item['price'], item['quantity']))
+            cursor.execute("UPDATE products SET stock = stock - %s WHERE product_id = %s", (item['quantity'], item['product_id']))
+            
+        cursor.execute("DELETE FROM cart WHERE user_id = %s", (user_id,))
+        conn.commit()
+        
+        return f"✅ Success! Your cart has been checked out. **Order #{order_id}** has been placed for a total of ₹{total}."
+    except Exception as e:
+        return f"Error during checkout: {str(e)}"
+    finally:
+        cursor.close()
+        close_db_connection(conn)
+
+# ==========================================
+# 9, 10, 11, 12. ORDER ACTIONS
 # ==========================================
 def place_order(user_id: int, product_name: str, quantity: int) -> str:
     if user_id == 0: 
@@ -339,6 +383,8 @@ def place_order(user_id: int, product_name: str, quantity: int) -> str:
     
     cursor.execute("INSERT INTO order_items (order_id, product_id, product_name, price, quantity) VALUES (%s, %s, %s, %s, %s)", (order_id, product['product_id'], product_name, product['price'], quantity))
     cursor.execute("UPDATE products SET stock = stock - %s WHERE product_id = %s", (quantity, product['product_id']))
+
+    cursor.execute("DELETE FROM cart WHERE user_id = %s AND product_id = %s", (user_id, product['product_id']))
     
     conn.commit()
     cursor.close()
@@ -447,17 +493,17 @@ async def process_chat(request: ChatRequest):
         return {"response": "AI configuration error. Missing API Key."}
         
     try:
-        # Get the actual ID of the logged-in user from the Request
         safe_user_id = request.user_id if request.user_id else 0
 
         system_prompt = """You are an elite, highly knowledgeable AI shopping assistant for AI Store.
         
         CRITICAL RULES:
-        1. ANSWERING QUERIES: If a user asks general questions about products, store policies, technology, or requires help deciding, answer them warmly, fully, and conversationally. Do not be robotic.
-        2. ADD TO CART VS ORDER: If a user asks to "add [item] to my cart", use the 'add_item_to_cart' tool. DO NOT use 'place_order' unless they explicitly say "buy", "purchase", or "place order now".
-        3. CART CONTENTS: If a user asks "what is in my cart" or "view my cart", you MUST use the 'view_user_cart' tool. Do NOT use order history for this.
-        4. TRACKING: If a user asks "where is my order" but does NOT give you an Order ID, use 'get_user_order_history'.
-        5. NO HTML: Never write HTML. Python handles UI rendering.
+        1. ANSWERING QUERIES: Answer questions warmly and conversationally.
+        2. CART CONTENTS: If a user asks "what is in my cart" or "view my cart", use 'view_user_cart'.
+        3. CHECKOUT CART: If the user asks to "order my cart", "buy my cart", or "checkout", use the 'checkout_cart' tool. DO NOT use 'place_order' for the whole cart.
+        4. CANCELLATIONS: If a user asks to cancel an item but doesn't provide the integer Order ID, use 'get_user_order_history' first to find the ID, then cancel it. NEVER guess the ID.
+        5. TRACKING: If a user asks "where is my order" without an ID, use 'get_user_order_history'.
+        6. NO HTML: Never write HTML. Python handles UI rendering.
         """
 
         tools = [
@@ -465,17 +511,18 @@ async def process_chat(request: ChatRequest):
             {"type": "function", "function": {"name": "compare_products", "description": "Compare two products.", "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}}},
             {"type": "function", "function": {"name": "get_product_details", "description": "Get deep specs for a single product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
             {"type": "function", "function": {"name": "find_cheaper_alternative", "description": "Find cheaper alternatives to a product.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
-            {"type": "function", "function": {"name": "get_user_order_history", "description": "Get recent orders for the user.", "parameters": {"type": "object", "properties": {}, "required": []}}},
+            {"type": "function", "function": {"name": "get_user_order_history", "description": "Get recent orders for the user. USE THIS to look up Order IDs if the user forgot.", "parameters": {"type": "object", "properties": {}, "required": []}}},
             {"type": "function", "function": {"name": "view_user_cart", "description": "View the items currently inside the user's shopping cart.", "parameters": {"type": "object", "properties": {}, "required": []}}},
             {"type": "function", "function": {"name": "add_item_to_cart", "description": "Add an item to the shopping cart WITHOUT checking out.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["product_name", "quantity"]}}},
-            {"type": "function", "function": {"name": "place_order", "description": "Instantly purchase an item.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["product_name", "quantity"]}}},
-            {"type": "function", "function": {"name": "check_order_status", "description": "Check status by specific Order ID.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer"}}, "required": ["order_id"]}}},
+            {"type": "function", "function": {"name": "place_order", "description": "Instantly purchase a single specific item.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["product_name", "quantity"]}}},
+            {"type": "function", "function": {"name": "checkout_cart", "description": "Purchase all items currently in the user's cart.", "parameters": {"type": "object", "properties": {}, "required": []}}},
+            {"type": "function", "function": {"name": "check_order_status", "description": "Check status by specific integer Order ID.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer", "description": "The exact integer ID of the order. DO NOT guess this."}}, "required": ["order_id"]}}},
             {"type": "function", "function": {"name": "modify_order", "description": "Modify the quantity of a product in an existing order.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer"}, "product_name": {"type": "string"}, "new_quantity": {"type": "integer"}}, "required": ["order_id", "product_name", "new_quantity"]}}},
-            {"type": "function", "function": {"name": "cancel_order", "description": "Cancel a specific order.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer"}}, "required": ["order_id"]}}}
+            {"type": "function", "function": {"name": "cancel_order", "description": "Cancel a specific order using its integer ID. If you only know the product name, check order history first.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer", "description": "The exact integer ID of the order. DO NOT guess this."}}, "required": ["order_id"]}}}
         ]
 
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": request.message}]
-        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, temperature=0.2, tools=tools)
+        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, temperature=0.1, tools=tools)
         response_message = response.choices[0].message
 
         if response_message.tool_calls:
@@ -499,6 +546,8 @@ async def process_chat(request: ChatRequest):
                 result = add_item_to_cart(safe_user_id, args.get("product_name", ""), args.get("quantity", 1))
             elif func_name == "place_order": 
                 result = place_order(safe_user_id, args.get("product_name", ""), args.get("quantity", 1))
+            elif func_name == "checkout_cart": 
+                result = checkout_cart(safe_user_id)
             elif func_name == "check_order_status": 
                 result = check_order_status(safe_user_id, args.get("order_id", 0))
             elif func_name == "modify_order": 

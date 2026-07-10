@@ -85,8 +85,19 @@ def get_user_profile(user_id: int):
         """, (user_id,))
         user = cursor.fetchone()
         
+        # THE FIX: If the logged-in user is an Admin testing the site, pull from admins table!
         if not user:
+            cursor.execute("SELECT admin_id as user_id, name, email FROM admins WHERE admin_id = %s", (user_id,))
+            admin = cursor.fetchone()
+            if admin:
+                # Provide empty defaults for fields admins don't have so the UI doesn't break
+                admin['phone'] = ''
+                admin['address'] = 'Admin Dashboard'
+                admin['city'] = ''
+                admin['pincode'] = ''
+                return admin
             return {"error": "User not found"}
+            
         return user
     except Exception as e:
         # This will print the exact database error to your Uvicorn terminal!
@@ -116,6 +127,11 @@ def update_user_profile(user_id: int, profile_data: dict):
             profile_data.get('pincode'), 
             user_id
         ))
+        
+        # THE FIX: If 0 rows updated, they are an admin. Update the admin's name.
+        if cursor.rowcount == 0:
+            cursor.execute("UPDATE admins SET name=%s WHERE admin_id=%s", (profile_data.get('name'), user_id))
+
         conn.commit()
         return {"message": "Profile updated successfully"}
     except Exception as e:

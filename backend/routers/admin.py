@@ -97,9 +97,11 @@ def get_all_orders():
         return {"error": "Database connection failed"}
     try:
         cursor = conn.cursor(dictionary=True)
+        # THE FIX: Uses LEFT JOIN and COALESCE so orders placed by Admins don't disappear
         cursor.execute("""
-            SELECT o.order_id, o.user_id, o.total_amount, o.status, o.order_date, u.name
-            FROM orders o JOIN users u ON o.user_id = u.user_id
+            SELECT o.order_id, o.user_id, o.total_amount, o.status, o.order_date, COALESCE(u.name, 'Admin/Guest') as name
+            FROM orders o 
+            LEFT JOIN users u ON o.user_id = u.user_id
             ORDER BY o.order_date DESC
         """)
         orders = cursor.fetchall()
