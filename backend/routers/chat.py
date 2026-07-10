@@ -319,7 +319,7 @@ def add_item_to_cart(user_id: int, product_name: str, quantity: int) -> str:
     return f"✅ Successfully added **{quantity}x {product['product_name']}** to your cart!<br><br><a href='cart.html' style='color: #6366f1; font-weight: bold; text-decoration: none;'>🛒 Click here to view Cart</a>"
 
 # ==========================================
-# 8. NEW: CHECKOUT ENTIRE CART
+# 8. CHECKOUT ENTIRE CART
 # ==========================================
 def checkout_cart(user_id: int) -> str:
     if user_id == 0: 
@@ -479,10 +479,44 @@ def cancel_order(user_id: int, order_id: int) -> str:
         return "I couldn't find an order with that ID."
         
     cursor.execute("UPDATE orders SET status = 'cancelled' WHERE order_id = %s", (order_id,))
+    # Restock
+    cursor.execute("UPDATE products p JOIN order_items oi ON p.product_id = oi.product_id SET p.stock = p.stock + oi.quantity WHERE oi.order_id = %s", (order_id,))
     conn.commit()
     cursor.close()
     close_db_connection(conn)
-    return f"Order #{order_id} has been successfully cancelled."
+    return f"Order #{order_id} has been successfully cancelled and items restocked."
+
+# ==========================================
+# 13. CANCEL ALL ORDERS
+# ==========================================
+def cancel_all_orders(user_id: int) -> str:
+    if user_id == 0: 
+        return "Please log in to cancel orders."
+        
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute("SELECT order_id FROM orders WHERE user_id = %s AND status = 'pending'", (user_id,))
+        pending_orders = cursor.fetchall()
+        
+        if not pending_orders:
+            return "You have no pending orders to cancel right now."
+            
+        count = 0
+        for order in pending_orders:
+            o_id = order['order_id']
+            cursor.execute("UPDATE orders SET status = 'cancelled' WHERE order_id = %s", (o_id,))
+            cursor.execute("UPDATE products pr JOIN order_items oi ON pr.product_id = oi.product_id SET pr.stock = pr.stock + oi.quantity WHERE oi.order_id = %s", (o_id,))
+            count += 1
+            
+        conn.commit()
+        return f"✅ Successfully cancelled {count} pending order(s) and restocked all items to the store!"
+    except Exception as e:
+        return f"Error cancelling all orders: {str(e)}"
+    finally:
+        cursor.close()
+        close_db_connection(conn)
 
 # ==========================================
 # MAIN AI PROCESSING ENGINE
@@ -501,8 +535,8 @@ async def process_chat(request: ChatRequest):
         1. ANSWERING QUERIES: Answer questions warmly and conversationally.
         2. CART CONTENTS: If a user asks "what is in my cart" or "view my cart", use 'view_user_cart'.
         3. CHECKOUT CART: If the user asks to "order my cart", "buy my cart", or "checkout", use the 'checkout_cart' tool. DO NOT use 'place_order' for the whole cart.
-        4. CANCELLATIONS: If a user asks to cancel an item but doesn't provide the integer Order ID, use 'get_user_order_history' first to find the ID, then cancel it. NEVER guess the ID.
-        5. TRACKING: If a user asks "where is my order" without an ID, use 'get_user_order_history'.
+        4. CANCELLATIONS: If a user asks to cancel an item but doesn't provide the integer Order ID, use 'get_user_order_history' first to find the ID. NEVER guess the ID.
+        5. CANCEL ALL: If the user explicitly asks to cancel *ALL* their orders, use the 'cancel_all_orders' tool.
         6. NO HTML: Never write HTML. Python handles UI rendering.
         """
 
@@ -518,7 +552,8 @@ async def process_chat(request: ChatRequest):
             {"type": "function", "function": {"name": "checkout_cart", "description": "Purchase all items currently in the user's cart.", "parameters": {"type": "object", "properties": {}, "required": []}}},
             {"type": "function", "function": {"name": "check_order_status", "description": "Check status by specific integer Order ID.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer", "description": "The exact integer ID of the order. DO NOT guess this."}}, "required": ["order_id"]}}},
             {"type": "function", "function": {"name": "modify_order", "description": "Modify the quantity of a product in an existing order.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer"}, "product_name": {"type": "string"}, "new_quantity": {"type": "integer"}}, "required": ["order_id", "product_name", "new_quantity"]}}},
-            {"type": "function", "function": {"name": "cancel_order", "description": "Cancel a specific order using its integer ID. If you only know the product name, check order history first.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer", "description": "The exact integer ID of the order. DO NOT guess this."}}, "required": ["order_id"]}}}
+            {"type": "function", "function": {"name": "cancel_order", "description": "Cancel a specific order using its integer ID. If you only know the product name, check order history first.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer", "description": "The exact integer ID of the order. DO NOT guess this."}}, "required": ["order_id"]}}},
+            {"type": "function", "function": {"name": "cancel_all_orders", "description": "Cancel ALL pending orders simultaneously.", "parameters": {"type": "object", "properties": {}, "required": []}}}
         ]
 
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": request.message}]
@@ -554,6 +589,8 @@ async def process_chat(request: ChatRequest):
                 result = modify_order(safe_user_id, args.get("order_id", 0), args.get("product_name", ""), args.get("new_quantity", 1))
             elif func_name == "cancel_order": 
                 result = cancel_order(safe_user_id, args.get("order_id", 0))
+            elif func_name == "cancel_all_orders":
+                result = cancel_all_orders(safe_user_id)
             else: 
                 result = "I'm sorry, I couldn't perform that action."
             
