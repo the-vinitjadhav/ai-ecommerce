@@ -421,7 +421,7 @@ async def process_chat(request: ChatRequest):
     try:
         # Step 1: Gatekeeper Filter
         gatekeeper_res = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": GATEKEEPER_PROMPT},
                 {"role": "user", "content": request.message}
