@@ -250,6 +250,27 @@ def add_item_to_cart(user_id: int, product_name: str, quantity: int = 1) -> str:
     conn.commit(); cursor.close(); close_db_connection(conn)
     return f"✅ Successfully added **{quantity}x {product['product_name']}** to your cart!<br><br><a href='cart.html' style='color: #6366f1; font-weight: bold; text-decoration: none;'>🛒 Click here to view Cart</a>"
 
+def remove_item_from_cart(user_id: int, product_name: str) -> str:
+    if user_id == 0: return "Please log in to modify your cart."
+    if not product_name: return "I didn't catch the name of the product you want to remove."
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT product_id, product_name FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
+    product = cursor.fetchone()
+    if not product:
+        cursor.close(); close_db_connection(conn)
+        return f"I couldn't find '{product_name}' in our catalog."
+        
+    cursor.execute("DELETE FROM cart WHERE user_id = %s AND product_id = %s", (user_id, product['product_id']))
+    affected = cursor.rowcount
+    conn.commit(); cursor.close(); close_db_connection(conn)
+    
+    if affected == 0:
+        return f"**{product['product_name']}** was not currently in your cart."
+        
+    return f"✅ Successfully removed **{product['product_name']}** from your cart.<br><br><a href='cart.html' style='color: #ef4444; font-weight: bold; text-decoration: none;'>🛒 Click here to view Cart</a>"
+
 def checkout_cart(user_id: int) -> str:
     if user_id == 0: return "Please log in to checkout your cart."
     conn = get_db_connection()
@@ -401,6 +422,7 @@ def execute_tool(func_name: str, args: dict, safe_user_id: int) -> str:
         "get_user_order_history": lambda: get_user_order_history(safe_user_id),
         "view_user_cart": lambda: view_user_cart(safe_user_id),
         "add_item_to_cart": lambda: add_item_to_cart(safe_user_id, args.get("product_name"), args.get("quantity", 1)),
+        "remove_item_from_cart": lambda: remove_item_from_cart(safe_user_id, args.get("product_name")),
         "place_order": lambda: place_order(safe_user_id, args.get("product_name"), args.get("quantity", 1)),
         "checkout_cart": lambda: checkout_cart(safe_user_id),
         "check_order_status": lambda: check_order_status(safe_user_id, args.get("order_id")),
@@ -424,10 +446,9 @@ GATEKEEPER_PROMPT = f"""
 {STORE_KNOWLEDGE}
 You are the frontline Gatekeeper for AI Store.
 - If the user greeting, asking store policy, shipping, or general information, answer directly and helpfully.
-- If the user wants to search, view cart, add items, checkout, check order status, modify, or cancel orders, OUTPUT ONLY ONE WORD: "DB_ACTION".
+- If the user wants to search, view cart, add items, remove items, checkout, check order status, modify, or cancel orders, OUTPUT ONLY ONE WORD: "DB_ACTION".
 """
 
-# NOTICE THE NEW RULE #3 ADDED TO THE PROMPT BELOW:
 AGENTIC_SYSTEM_PROMPT = """You are an autonomous e-commerce reasoning agent for AI Store.
 You have access to real-time database tools.
 
@@ -435,10 +456,11 @@ AUTONOMOUS EXECUTION RULES:
 1. MULTI-STEP REASONING: If a user asks to cancel, track, or modify an order by item name without providing the integer order_id, DO NOT ask the user for the ID. First call 'get_user_order_history', observe the order_id associated with that product, and then automatically call 'cancel_order' or 'modify_order' in the next step.
 2. CHECKOUT vs EXPRESS: If the user says "checkout" or "buy my cart", use 'checkout_cart'. If they specify a single product directly to buy now, use 'place_order'.
 3. SILENT UI RENDERING: The Python backend automatically displays the HTML result of the LAST tool you called directly to the user. Because of this, after you successfully call a tool, you MUST output exactly the word "DONE" and nothing else. Do not summarize the products, do not say 'Here is your cart'. Just output "DONE".
+4. REMOVING FROM CART: If a user asks to remove an item from their cart, use the 'remove_item_from_cart' tool. DO NOT use 'add_item_to_cart' with quantity 0.
 """
 
 # =====================================================================
-# 3. MULTI-TURN ENGINE (With Silent UI Intercept)
+# 3. MULTI-TURN ENGINE
 # =====================================================================
 
 @router.post("")
@@ -469,6 +491,7 @@ async def process_chat(request: ChatRequest):
             {"type": "function", "function": {"name": "get_user_order_history", "description": "Get recent order records for the user.", "parameters": {"type": "object", "properties": {}}}},
             {"type": "function", "function": {"name": "view_user_cart", "description": "View items in the user's cart.", "parameters": {"type": "object", "properties": {}}}},
             {"type": "function", "function": {"name": "add_item_to_cart", "description": "Add an item to the shopping cart.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["product_name", "quantity"]}}},
+            {"type": "function", "function": {"name": "remove_item_from_cart", "description": "Remove an item completely from the shopping cart.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}}, "required": ["product_name"]}}},
             {"type": "function", "function": {"name": "place_order", "description": "Express buy a single specific product immediately.", "parameters": {"type": "object", "properties": {"product_name": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["product_name", "quantity"]}}},
             {"type": "function", "function": {"name": "checkout_cart", "description": "Process the entire current shopping cart into an order.", "parameters": {"type": "object", "properties": {}}}},
             {"type": "function", "function": {"name": "check_order_status", "description": "Check status by integer order ID.", "parameters": {"type": "object", "properties": {"order_id": {"type": "integer"}}, "required": ["order_id"]}}},
@@ -482,7 +505,6 @@ async def process_chat(request: ChatRequest):
             {"role": "user", "content": request.message}
         ]
 
-        # The Silent UI Intercept logic is implemented here
         last_tool_output = ""
         
         for _ in range(5):
@@ -502,22 +524,17 @@ async def process_chat(request: ChatRequest):
                 ]
             messages.append(assistant_msg)
 
-            # If the AI did NOT call a tool this round, it's trying to talk to the user.
             if not msg.tool_calls:
                 final_text = (msg.content or "").strip()
                 
-                # INTERCEPT: If the AI output "DONE", or needlessly summarized our HTML, we block it and push the raw HTML.
                 if "DONE" in final_text.upper() or (last_tool_output and len(final_text) > 150):
                     return {"response": last_tool_output}
                 
-                # INTERCEPT: If it wrote a very short custom message (e.g., "I couldn't find your order")
                 if last_tool_output and final_text:
                     return {"response": f"{final_text}<br><br>{last_tool_output}"}
                 
-                # Fallback: Just return the text if no tools were used.
                 return {"response": final_text}
 
-            # If tools were called, execute them and store the HTML/Message in `last_tool_output`
             last_tool_output = ""
             for tool_call in msg.tool_calls:
                 func_name = tool_call.function.name
