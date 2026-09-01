@@ -9,3 +9,11 @@ pyjwt
 bcrypt
 pydantic-core
 python-multipart
+langchain
+langgraph
+langchain-groq
+pydantic
+faiss-cpu
+sentence-transformers
+langchain-huggingface
+langchain-community
