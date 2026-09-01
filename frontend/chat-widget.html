@@ -1,32 +1,38 @@
 <div id="ai-chat-widget">
-    
-    <button id="chat-toggle" class="chat-toggle-btn">
+    <button id="chat-toggle" class="chat-toggle-btn shadow-glow">
         <i class="bi bi-stars"></i>
     </button>
 
     <div id="chat-popup" class="modern-chat-popup">
         
-        <div class="chat-header">
-            <div class="chat-header-info">
-                <div class="chat-avatar">✨</div>
+        <div class="chat-header" style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);">
+            <div class="chat-header-info text-white">
+                <div class="chat-avatar bg-white text-primary">✨</div>
                 <div>
-                    <h6>AI Store Assistant</h6>
-                    <small>● Live Guide</small>
+                    <h6 class="mb-0 fw-bold">AI Agent</h6>
+                    <small style="color: rgba(255,255,255,0.8);">● LangGraph Active</small>
                 </div>
             </div>
-            <button id="chat-close" class="chat-close-btn"><i class="bi bi-x-lg"></i></button>
+            <button id="chat-close" class="chat-close-btn text-white"><i class="bi bi-x-lg"></i></button>
         </div>
 
-        <div id="widget-chat-messages">
-            <div class="chat-welcome-msg">
-                👋 Hello! I'm your AI shopping guide. I can help you find products, check prices, or place orders instantly.
-                        </div>
+        <!-- Inline Thought Process for Widget -->
+        <div id="widget-thought-indicator" style="display: none; background: #f8fafc; padding: 5px 15px; font-size: 0.75rem; color: #64748b; border-bottom: 1px solid #e2e8f0;">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status" style="width: 10px; height: 10px;"></div>
+            <span id="widget-thought-text">Agent reasoning...</span>
         </div>
 
-        <div class="chat-input-container">
-            <div class="chat-input-wrapper">
-                <input id="widget-chat-input" type="text" placeholder="Type an inquiry here...">
-                <button id="widget-chat-send" class="chat-send-btn"><i class="bi bi-send-fill"></i></button>
+        <div id="widget-chat-messages" style="background: #f8fafc;">
+            <div class="chat-welcome-msg bubble" style="background: white; border: 1px solid #e2e8f0; color: #1e293b;">
+                👋 Hello! I'm connected to the database and policies. How can I help you?
+            </div>
+        </div>
+
+        <div class="chat-input-container" style="background: white; border-top: 1px solid #e2e8f0;">
+            <div class="chat-input-wrapper d-flex gap-2 p-2">
+                <button id="widget-voice-btn" class="btn btn-light rounded-circle" style="width: 40px; height: 40px;"><i class="bi bi-mic-fill text-muted"></i></button>
+                <input id="widget-chat-input" type="text" class="form-control rounded-pill bg-light" placeholder="Ask anything...">
+                <button id="widget-chat-send" class="btn btn-primary rounded-circle" style="width: 40px; height: 40px; background: #6366f1; border:none;"><i class="bi bi-send-fill"></i></button>
             </div>
         </div>
     </div>

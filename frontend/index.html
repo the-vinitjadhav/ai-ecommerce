@@ -34,59 +34,67 @@
     <div class="container hero-split">
         <div class="row align-items-center min-vh-75">
             <div class="col-lg-6 hero-content pe-lg-5">
-                <div class="badge-pill mb-3">🚀 Next-Generation Shopping</div>
-                <h1 class="display-3 fw-bold mb-4">Shop smarter with <span class="gradient-text">AI power.</span></h1>
-                <p class="lead text-muted mb-5">Experience a curated shopping journey guided by your personal AI assistant. Fast, intelligent, and designed for you.</p>
+                <div class="badge-pill mb-3">🚀 Compound AI System</div>
+                <h1 class="display-3 fw-bold mb-4">Shop smarter with <span class="gradient-text">LangGraph power.</span></h1>
+                <p class="lead text-muted mb-5">Experience a curated shopping journey guided by a multi-agent system. Real-time reasoning, secure transactions, and proactive personalization.</p>
                 <div class="hero-buttons d-flex gap-3">
-                    <a href="products.html" class="btn btn-primary btn-lg rounded-pill px-5 shadow-glow">Explore Products</a>
+                    <a href="products.html" class="btn btn-primary btn-lg rounded-pill px-5 shadow-glow">Explore Catalog</a>
                     <a href="chat.html" class="btn btn-outline-dark btn-lg rounded-pill px-4">
-                        <i class="bi bi-robot me-2"></i> Ask AI
+                        <i class="bi bi-robot me-2"></i> Talk to Agent
                     </a>
                 </div>
             </div>
             <div class="col-lg-6 position-relative d-none d-lg-block">
-                
                 <div class="ai-core-container">
                     <div class="ai-core">
                         <div class="core-ring ring-1"></div>
                         <div class="core-ring ring-2"></div>
                         <div class="core-ring ring-3"></div>
-                        <div class="core-center">
-                            <i class="bi bi-robot"></i>
-                        </div>
+                        <div class="core-center"><i class="bi bi-cpu"></i></div>
                     </div>
-                    
                     <div class="floating-badge badge-1">
-                        <i class="bi bi-lightning-charge-fill text-warning"></i> Real-time AI Analysis
+                        <i class="bi bi-lightning-charge-fill text-warning"></i> Real-time SSE Streaming
                     </div>
                     <div class="floating-badge badge-2">
-                        <i class="bi bi-shield-check text-success"></i> Smart Secure Checkout
+                        <i class="bi bi-shield-check text-success"></i> Strict Database Routing
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
 
-    <div class="container mt-5 pt-5">
+    <!-- Proactive Personalization Banner -->
+    <div class="container" id="proactive-banner-container" style="display: none; margin-top: -30px; position: relative; z-index: 10;">
+        <div class="alert alert-primary d-flex align-items-center justify-content-between rounded-pill py-3 px-4 shadow-sm border-0" role="alert" style="background: linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(168,85,247,0.1) 100%);">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-stars fs-4 me-3 text-primary"></i>
+                <div>
+                    <strong>AI Insight:</strong> <span id="proactive-message">Based on your activity, we thought you might like these.</span>
+                </div>
+            </div>
+            <a href="cart.html" class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm">View Cart</a>
+        </div>
+    </div>
+
+    <div class="container mt-5 pt-4">
         <div class="d-flex justify-content-between align-items-end mb-5">
             <div>
                 <h2 class="fw-bold mb-0">Trending Now</h2>
-                <p class="text-muted">Handpicked by our AI algorithm.</p>
+                <p class="text-muted">Dynamically pulled from the product database.</p>
             </div>
             <a href="products.html" class="text-decoration-none fw-bold gradient-text">View All <i class="bi bi-arrow-right"></i></a>
         </div>
         
         <div class="row g-4" id="featured-products">
-            </div>
+            <!-- Dynamic JS injection here -->
+        </div>
     </div>
 
     <footer class="mt-auto py-5 text-center">
         <div class="container border-top pt-5">
             <span class="gradient-text fw-bold fs-4">✨ AI Store</span>
-            <p class="text-muted mt-3 mb-0">&copy; 2026. Designed for the future.</p>
+            <p class="text-muted mt-3 mb-0">&copy; 2026. Engineered for the enterprise.</p>
         </div>
-        
     </footer>
 
     <div id="ai-chat-widget-container"></div>
@@ -94,5 +102,22 @@
     <script src="js/api.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/products.js"></script>
+    
+    <!-- Proactive Logic Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const userId = localStorage.getItem('userId');
+            if(userId) {
+                try {
+                    const cart = await getCart(userId);
+                    if(cart && cart.length > 0) {
+                        const firstItem = cart[0].product_name;
+                        document.getElementById('proactive-message').textContent = `You left ${cart.length} item(s) in your cart, including a ${firstItem}. Checkout now to secure stock!`;
+                        document.getElementById('proactive-banner-container').style.display = 'block';
+                    }
+                } catch(e) {}
+            }
+        });
+    </script>
 </body>
 </html>
