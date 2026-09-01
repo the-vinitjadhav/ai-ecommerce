@@ -12,7 +12,7 @@ api_key = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=api_key) if api_key else None
 
 # =====================================================================
-# 1. DETERMINISTIC UI & DATABASE TOOLS (Consistent HTML Locked In)
+# 1. DETERMINISTIC UI & DATABASE TOOLS
 # =====================================================================
 
 def get_product_recommendation(search_term: str = None, max_price: int = None, category: str = None, user_id: int = 0) -> str:
@@ -365,7 +365,7 @@ def cancel_order(user_id: int, order_id: int) -> str:
     cursor.execute("UPDATE orders SET status = 'cancelled' WHERE order_id = %s", (order_id,))
     cursor.execute("UPDATE products p JOIN order_items oi ON p.product_id = oi.product_id SET p.stock = p.stock + oi.quantity WHERE oi.order_id = %s", (order_id,))
     conn.commit(); cursor.close(); close_db_connection(conn)
-    return f"Order #{order_id} has been successfully cancelled and items restocked."
+    return f"✅ Order #{order_id} has been successfully cancelled and items restocked."
 
 def cancel_all_orders(user_id: int) -> str:
     if user_id == 0: return "Please log in to cancel orders."
@@ -427,17 +427,18 @@ You are the frontline Gatekeeper for AI Store.
 - If the user wants to search, view cart, add items, checkout, check order status, modify, or cancel orders, OUTPUT ONLY ONE WORD: "DB_ACTION".
 """
 
+# NOTICE THE NEW RULE #3 ADDED TO THE PROMPT BELOW:
 AGENTIC_SYSTEM_PROMPT = """You are an autonomous e-commerce reasoning agent for AI Store.
 You have access to real-time database tools.
 
 AUTONOMOUS EXECUTION RULES:
-1. MULTI-STEP REASONING: If a user asks to cancel, track, or modify an order by item name (e.g., "cancel my shoe order") without providing the integer order_id, DO NOT ask the user for the ID. First call 'get_user_order_history', observe the order_id associated with that product, and then automatically call 'cancel_order' or 'modify_order' in the next step.
+1. MULTI-STEP REASONING: If a user asks to cancel, track, or modify an order by item name without providing the integer order_id, DO NOT ask the user for the ID. First call 'get_user_order_history', observe the order_id associated with that product, and then automatically call 'cancel_order' or 'modify_order' in the next step.
 2. CHECKOUT vs EXPRESS: If the user says "checkout" or "buy my cart", use 'checkout_cart'. If they specify a single product directly to buy now, use 'place_order'.
-3. NO HTML: Never attempt to write HTML or formatting tags. The Python backend handles UI generation exclusively.
+3. SILENT UI RENDERING: The Python backend automatically displays the HTML result of the LAST tool you called directly to the user. Because of this, after you successfully call a tool, you MUST output exactly the word "DONE" and nothing else. Do not summarize the products, do not say 'Here is your cart'. Just output "DONE".
 """
 
 # =====================================================================
-# 3. MULTI-TURN ENGINE (Strict Nullable JSON Schemas)
+# 3. MULTI-TURN ENGINE (With Silent UI Intercept)
 # =====================================================================
 
 @router.post("")
@@ -460,7 +461,6 @@ async def process_chat(request: ChatRequest):
             return {"response": gatekeeper_res}
 
         # Step 2: Multi-Turn Orchestrator using openai/gpt-oss-120b[cite: 1]
-        # Updated Schema to prevent 400 Bad Request by allowing ["string", "null"] types.
         tools_schema = [
             {"type": "function", "function": {"name": "get_product_recommendation", "description": "Search products dynamically.", "parameters": {"type": "object", "properties": {"search_term": {"type": ["string", "null"]}, "max_price": {"type": ["integer", "null"]}, "category": {"type": ["string", "null"]}}}}},
             {"type": "function", "function": {"name": "compare_products", "description": "Compare two products.", "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}}},
@@ -482,7 +482,9 @@ async def process_chat(request: ChatRequest):
             {"role": "user", "content": request.message}
         ]
 
-        # Max 5 chained loops to prevent infinite routing
+        # The Silent UI Intercept logic is implemented here
+        last_tool_output = ""
+        
         for _ in range(5):
             response = client.chat.completions.create(
                 model="openai/gpt-oss-120b",
@@ -500,19 +502,32 @@ async def process_chat(request: ChatRequest):
                 ]
             messages.append(assistant_msg)
 
+            # If the AI did NOT call a tool this round, it's trying to talk to the user.
             if not msg.tool_calls:
-                return {"response": msg.content}
+                final_text = (msg.content or "").strip()
+                
+                # INTERCEPT: If the AI output "DONE", or needlessly summarized our HTML, we block it and push the raw HTML.
+                if "DONE" in final_text.upper() or (last_tool_output and len(final_text) > 150):
+                    return {"response": last_tool_output}
+                
+                # INTERCEPT: If it wrote a very short custom message (e.g., "I couldn't find your order")
+                if last_tool_output and final_text:
+                    return {"response": f"{final_text}<br><br>{last_tool_output}"}
+                
+                # Fallback: Just return the text if no tools were used.
+                return {"response": final_text}
 
+            # If tools were called, execute them and store the HTML/Message in `last_tool_output`
+            last_tool_output = ""
             for tool_call in msg.tool_calls:
                 func_name = tool_call.function.name
-                
-                # Safe JSON parsing fallback
                 try:
                     args = json.loads(tool_call.function.arguments)
                 except json.JSONDecodeError:
                     args = {}
                     
                 tool_output = execute_tool(func_name, args, safe_user_id)
+                last_tool_output += str(tool_output)
                 
                 messages.append({
                     "role": "tool",
