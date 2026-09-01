@@ -12,7 +12,7 @@ api_key = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=api_key) if api_key else None
 
 # =====================================================================
-# 1. DETERMINISTIC DATABASE TOOLS (The Agent's "Hands")
+# 1. DATABASE TOOLS (Deterministic Execution)
 # =====================================================================
 
 def get_product_recommendation(search_term: str = None, max_price: int = None, category: str = None, user_id: int = 0) -> str:
@@ -163,7 +163,6 @@ def get_user_order_history(user_id: int) -> str:
     
     if not orders: return "No recent orders found."
     
-    # Return structured details for both Agent reasoning and UI display
     html = "<div style='display:flex; flex-direction:column; gap:8px; margin-top:5px;'>"
     for o in orders:
         html += f"""
@@ -362,7 +361,7 @@ def cancel_all_orders(user_id: int) -> str:
     finally: cursor.close(); close_db_connection(conn)
 
 # =====================================================================
-# 2. DISPATCHER & AGENT SCHEMAS
+# 2. DISPATCHER & PROMPTS
 # =====================================================================
 
 def execute_tool(func_name: str, args: dict, safe_user_id: int) -> str:
@@ -410,7 +409,7 @@ AUTONOMOUS EXECUTION RULES:
 """
 
 # =====================================================================
-# 3. DUAL-MODEL MULTI-TURN PROCESSING ENGINE
+# 3. DUAL-MODEL ENGINE (DEVELOPER PLAN MODELS)
 # =====================================================================
 
 @router.post("")
@@ -419,9 +418,9 @@ async def process_chat(request: ChatRequest):
     safe_user_id = request.user_id if request.user_id else 0
 
     try:
-        # Step 1: Gatekeeper Filter
+        # Step 1: Gatekeeper Filter using openai/gpt-oss-20b (1000 tps)
         gatekeeper_res = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-20b",
             messages=[
                 {"role": "system", "content": GATEKEEPER_PROMPT},
                 {"role": "user", "content": request.message}
@@ -432,7 +431,7 @@ async def process_chat(request: ChatRequest):
         if "DB_ACTION" not in gatekeeper_res:
             return {"response": gatekeeper_res}
 
-        # Step 2: Multi-Turn Orchestrator
+        # Step 2: Multi-Turn Orchestrator using openai/gpt-oss-120b (500 tps)
         tools_schema = [
             {"type": "function", "function": {"name": "get_product_recommendation", "description": "Search products dynamically.", "parameters": {"type": "object", "properties": {"search_term": {"type": "string"}, "max_price": {"type": "integer"}, "category": {"type": "string"}}}}},
             {"type": "function", "function": {"name": "compare_products", "description": "Compare two products.", "parameters": {"type": "object", "properties": {"product_a": {"type": "string"}, "product_b": {"type": "string"}}, "required": ["product_a", "product_b"]}}},
@@ -454,10 +453,9 @@ async def process_chat(request: ChatRequest):
             {"role": "user", "content": request.message}
         ]
 
-        # Multi-Turn ReAct Execution Loop
         for _ in range(5):
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=messages,
                 tools=tools_schema,
                 temperature=0.1
