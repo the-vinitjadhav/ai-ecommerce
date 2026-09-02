@@ -7,6 +7,8 @@ from typing import Optional, Literal, TypedDict, Annotated
 
 # --- LangChain & LangGraph Imports ---
 from langchain_groq import ChatGroq
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
@@ -25,6 +27,8 @@ router = APIRouter(prefix="/api/chat", tags=["AI Agent"])
 # =====================================================================
 # 1. RAG INITIALIZATION & PROACTIVE PERSONALIZATION
 # =====================================================================
+print("Loading RAG Embeddings & Vector DB...")
+embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 KNOWLEDGE_DOCS = [
     "Shipping Policy: Standard shipping takes 3-5 business days. Expedited takes 1-2 days. Shipping is free for orders over ₹10,000.",
@@ -34,25 +38,15 @@ KNOWLEDGE_DOCS = [
     "Customer Support: You can reach our 24/7 support team by emailing support@aistore.com.",
     "Store Location: Our primary warehouse is located in Pune, Maharashtra, India."
 ]
+vector_db = FAISS.from_texts(KNOWLEDGE_DOCS, embeddings)
 
 @tool
 def search_knowledge_base(query: str) -> str:
     """Searches company policies, shipping rules, warranties, and FAQs."""
-    # Lightweight, Zero-RAM RAG implementation using native Python
-    query_words = query.lower().split()
-    scored_docs = []
-    
-    for doc in KNOWLEDGE_DOCS:
-        score = sum(1 for word in query_words if word in doc.lower())
-        scored_docs.append((score, doc))
-        
-    scored_docs.sort(key=lambda x: x[0], reverse=True)
-    best_docs = [doc for score, doc in scored_docs if score > 0][:2]
-    
-    if not best_docs:
-        return "\n".join(KNOWLEDGE_DOCS[:3])
-        
-    return "\n\n".join(best_docs)
+    docs = vector_db.similarity_search(query, k=2)
+    if not docs:
+        return "No relevant policies found for that query."
+    return "\n\n".join([doc.page_content for doc in docs])
 
 def db_get_user_context(user_id: int) -> str:
     """Proactively fetches user history to inject into the AI's brain before they even ask."""
@@ -519,7 +513,8 @@ class AgentState(TypedDict):
     user_id: int
 
 def supervisor_node(state: AgentState):
-    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0) # FAST & RELIABLE MODEL
+    # FIXED: Uses the exact model specified in the user's Groq tier documentation
+    llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0)
     system_prompt = "You are the AI Supervisor. Read the user's message and determine the correct department to route to."
     messages = [{"role": "system", "content": system_prompt}] + state["messages"]
     
@@ -533,14 +528,17 @@ def sales_node(state: AgentState):
     RULE 1: For order lookups missing an ID, use get_user_order_history first.
     RULE 2: Your tools generate HTML. Do not summarize their output. When a tool finishes successfully, output exactly: "DONE"."""
     
-    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.1)
+    # FIXED: Uses the exact model specified in the user's Groq tier documentation
+    llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.1)
     agent = create_react_agent(llm, get_sales_tools(state["user_id"]), state_modifier=sales_prompt)
     result = agent.invoke({"messages": state["messages"]})
     return {"messages": result["messages"]}
 
 def support_node(state: AgentState):
     support_prompt = "You are the Support Agent. If the user says hello, greet them. If they ask about policies, use search_knowledge_base. Answer conversationally in text."
-    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.1)
+    
+    # FIXED: Uses the exact model specified in the user's Groq tier documentation
+    llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.1)
     agent = create_react_agent(llm, [search_knowledge_base], state_modifier=support_prompt)
     result = agent.invoke({"messages": state["messages"]})
     return {"messages": result["messages"]}
