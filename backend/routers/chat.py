@@ -502,7 +502,7 @@ def get_sales_tools(safe_user_id: int):
 
 class RouteDefinition(BaseModel):
     next_node: Literal["Sales", "Support"] = Field(
-        description="Route to 'Sales' for product searches, carts, checkouts, and orders. Route to 'Support' for greetings, policies, shipping, and FAQs."
+        description="Route to 'Sales' for product searches, carts, checkouts, and orders. Route to 'Support' for policies, shipping, and FAQs."
     )
 
 class AgentState(TypedDict):
@@ -511,7 +511,7 @@ class AgentState(TypedDict):
     user_id: int
 
 def supervisor_node(state: AgentState):
-    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0) # FIXED MODEL
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0) # FAST & RELIABLE MODEL
     system_prompt = "You are the AI Supervisor. Read the user's message and determine the correct department to route to."
     messages = [{"role": "system", "content": system_prompt}] + state["messages"]
     
@@ -552,7 +552,7 @@ memory = MemorySaver()
 multi_agent_graph = builder.compile(checkpointer=memory)
 
 # =====================================================================
-# 4. SERVER-SENT EVENTS (SSE) STREAMING ENDPOINT
+# 4. ROBUST SERVER-SENT EVENTS (SSE) STREAMING ENDPOINT
 # =====================================================================
 
 @router.post("")
