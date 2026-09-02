@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 import os
 import json
 import urllib.parse
+from contextvars import ContextVar
 from typing import Optional, Literal, TypedDict, Annotated
 
 # --- LangChain & LangGraph Imports ---
@@ -19,18 +20,23 @@ from langgraph.checkpoint.memory import MemorySaver
 from backend.database import get_db_connection, close_db_connection
 from backend.models import ChatRequest
 
-# Architecture by Vinit Jadhav | AI E-Commerce Portfolio
 router = APIRouter(prefix="/api/chat", tags=["AI Agent"])
 
+# Request-scoped queue for UI blocks (prevents sending heavy HTML to the LLM)
+ui_queue_var: ContextVar[list] = ContextVar("ui_queue_var", default=[])
+
+def clean_html(raw_html: str) -> str:
+    """Removes all arbitrary newlines and excessive whitespace for clean browser rendering."""
+    return " ".join(line.strip() for line in raw_html.splitlines() if line.strip())
+
 # =====================================================================
-# 1. DYNAMIC DATABASE RAG & CONTEXT ENGINE
+# 1. DYNAMIC DATABASE RAG & METADATA
 # =====================================================================
 
 def get_store_metadata() -> dict:
-    """Dynamically fetches active categories and sample inventory to ground the LLM's brain."""
     conn = get_db_connection()
     if not conn:
-        return {"categories": [], "brands": []}
+        return {"categories": []}
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute("SELECT DISTINCT category_name FROM products WHERE category_name IS NOT NULL")
@@ -56,7 +62,6 @@ def search_knowledge_base(query: str) -> str:
         if not policies: 
             return "No store policies found."
 
-        # Lexical scoring with synonym tolerance
         query_words = set(query.lower().split())
         scored = []
         for p in policies:
@@ -74,15 +79,13 @@ def search_knowledge_base(query: str) -> str:
 
 def db_get_user_context(user_id: int) -> str:
     if user_id == 0: 
-        return "User Profile: Guest Visitor (Not logged in)."
+        return "Customer: Guest User."
     
     conn = get_db_connection()
     if not conn: return ""
     cursor = conn.cursor(dictionary=True)
     
-    context_str = f"User Profile: Logged-in Customer #{user_id}\n"
-    
-    # Active Cart
+    context_str = f"Customer ID: #{user_id}\n"
     cursor.execute("SELECT p.product_name, c.quantity, p.price FROM cart c JOIN products p ON c.product_id = p.product_id WHERE c.user_id = %s", (user_id,))
     cart_items = cursor.fetchall()
     if cart_items:
@@ -90,39 +93,30 @@ def db_get_user_context(user_id: int) -> str:
     else:
         context_str += "ACTIVE CART: Empty\n"
         
-    # Last Order
     cursor.execute("SELECT order_id, total_amount, status FROM orders WHERE user_id = %s ORDER BY order_date DESC LIMIT 1", (user_id,))
     last_order = cursor.fetchone()
     if last_order:
-        context_str += f"RECENT ORDER: #{last_order['order_id']} | Status: {last_order['status']} | Total: ₹{last_order['total_amount']}\n"
+        context_str += f"LAST ORDER: #{last_order['order_id']} ({last_order['status']})\n"
         
     cursor.close(); close_db_connection(conn)
     return context_str
 
 # =====================================================================
-# 2. INTELLIGENT SEARCH & DETERMINISTIC TRANSACTION TOOLS
+# 2. INTELLIGENT TOOLS (HTML Sent to UI, Short Text to LLM)
 # =====================================================================
 
-def db_smart_product_search(search_keywords: str = "", category: str = "", max_price: int = None, min_price: int = None, user_id: int = 0) -> str:
-    """
-    Intelligent fuzzy product search that handles synonyms, multi-word matching,
-    and category inferences without breaking on exact phrasing.
-    """
+def db_smart_product_search(search_keywords: str = "", category: str = "", max_price: int = None, user_id: int = 0) -> str:
     conn = get_db_connection()
     if not conn: return "Database connection unavailable."
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # 1. Fetch candidate products within price and optional category filters
         sql = "SELECT * FROM products WHERE 1=1"
         params = []
 
         if max_price:
             sql += " AND price <= %s"
             params.append(max_price)
-        if min_price:
-            sql += " AND price >= %s"
-            params.append(min_price)
         if category and category.lower() not in ["all", "any"]:
             sql += " AND category_name LIKE %s"
             params.append(f"%{category}%")
@@ -131,15 +125,13 @@ def db_smart_product_search(search_keywords: str = "", category: str = "", max_p
         candidates = cursor.fetchall()
 
         if not candidates:
-            # Broaden search if price constraints were too strict
             cursor.execute("SELECT * FROM products LIMIT 15")
             candidates = cursor.fetchall()
 
         if not candidates:
             return "Our catalog is currently empty."
 
-        # 2. Semantic token scoring (Title: 4pts, Category: 3pts, Description: 1pt)
-        stop_words = {"suggest", "recommend", "show", "give", "find", "best", "good", "cheap", "expensive", "buy", "product", "products", "item", "items", "for", "the", "with", "and", "me", "some", "a", "an"}
+        stop_words = {"suggest", "recommend", "show", "give", "find", "best", "good", "cheap", "buy", "product", "products", "item", "items", "for", "the", "with", "and", "me", "some", "a", "an"}
         raw_words = search_keywords.replace(",", " ").replace("/", " ").lower().split()
         target_tokens = [w.strip() for w in raw_words if w.strip() and w.strip() not in stop_words]
 
@@ -166,27 +158,21 @@ def db_smart_product_search(search_keywords: str = "", category: str = "", max_p
 
         scored_products.sort(key=lambda x: x[0], reverse=True)
         results = [item[1] for item in scored_products[:4]]
-
         if not results:
             results = candidates[:4]
 
-        # 3. Generate Modern UI Cards
-        html = "<div style='display:flex; flex-direction:column; gap:10px; margin-top:8px;'>"
+        # Build clean, minified HTML cards
+        cards_html = "<div style='display:flex; flex-direction:column; gap:10px; margin-top:8px;'>"
+        summary_names = []
         for p in results:
+            summary_names.append(f"{p['product_name']} (₹{p['price']})")
             img = p.get('image_url') or f"https://ui-avatars.com/api/?name={urllib.parse.quote(str(p.get('product_name')))}&background=random"
-            html += f"""
-            <div style="display: flex; gap: 12px; padding: 12px; background: rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.06); border-radius: 14px; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-                <img src="{img}" style="width: 65px; height: 65px; object-fit: cover; border-radius: 10px; flex-shrink: 0;">
-                <div style="flex: 1; min-width: 0;">
-                    <div style="font-size: 0.75rem; color: #6366f1; font-weight: bold; text-transform: uppercase;">{p.get('category_name', 'Featured')}</div>
-                    <h6 style="margin: 2px 0 4px 0; font-size: 0.95rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{p['product_name']}</h6>
-                    <div style="font-weight: 800; color: #0f172a; font-size: 1.1rem; margin-bottom: 6px;">₹{p['price']}</div>
-                    <button style="background: linear-gradient(135deg, #0f172a, #334155); color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer;" onclick="widgetAddToCart({p['product_id']})">Add to Cart</button>
-                </div>
-            </div>
-            """
-        html += "</div>"
-        return html
+            cards_html += f"""<div style="display:flex; gap:12px; padding:12px; background:rgba(255,255,255,0.85); border:1px solid rgba(0,0,0,0.08); border-radius:14px; align-items:center; box-shadow:0 2px 8px rgba(0,0,0,0.03);"><img src="{img}" style="width:65px; height:65px; object-fit:cover; border-radius:10px; flex-shrink:0;"><div style="flex:1; min-width:0;"><div style="font-size:0.75rem; color:#6366f1; font-weight:bold; text-transform:uppercase;">{p.get('category_name', 'Featured')}</div><h6 style="margin:2px 0 4px 0; font-size:0.92rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{p['product_name']}</h6><div style="font-weight:800; color:#0f172a; font-size:1.05rem; margin-bottom:6px;">₹{p['price']}</div><button style="background:#0f172a; color:white; border:none; padding:6px 14px; border-radius:8px; font-size:0.8rem; font-weight:600; cursor:pointer;" onclick="widgetAddToCart({p['product_id']})">Add to Cart</button></div></div>"""
+        cards_html += "</div>"
+
+        # Queue HTML for frontend streaming, return tiny summary to the LLM
+        ui_queue_var.get().append(clean_html(cards_html))
+        return f"Found {len(results)} items: " + "; ".join(summary_names) + ". Cards have been displayed on user's screen."
     except Exception as e:
         return f"Error querying products: {str(e)}"
     finally:
@@ -204,66 +190,47 @@ def db_compare_products(product_a: str, product_b: str, user_id: int) -> str:
             if p: results.append(p)
                 
         if len(results) < 2: 
-            return "I couldn't locate both products in the catalog to draw a direct comparison."
+            return "Could not find both items to compare."
 
-        html = "<div style='display: flex; gap: 10px; overflow-x: auto; padding: 5px 0; margin-top: 5px;'>"
+        cards_html = "<div style='display:flex; gap:10px; overflow-x:auto; padding:5px 0; margin-top:5px;'>"
         for p in results:
             img = p.get('image_url') or f"https://ui-avatars.com/api/?name={urllib.parse.quote(str(p.get('product_name')))}&background=random"
-            html += f"""
-            <div style="flex: 1; min-width: 140px; background: rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.05); border-radius: 12px; padding: 12px; text-align: center;">
-                <img src="{img}" style="width: 70px; height: 70px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;">
-                <h6 style="font-size: 0.85rem; font-weight: bold; margin: 0 0 5px 0; height: 32px; overflow: hidden;">{p['product_name']}</h6>
-                <p style="color: #6366f1; font-weight: 800; font-size: 1.1rem; margin: 0 0 8px 0;">₹{p['price']}</p>
-                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 10px;">{p.get('category_name', 'General')}</div>
-                <button style="background: #0f172a; color: white; border: none; padding: 6px 10px; border-radius: 6px; width: 100%; font-size: 0.8rem; cursor: pointer;" onclick="widgetAddToCart({p['product_id']})">Add to Cart</button>
-            </div>
-            """
-        html += "</div>"
-        return html
+            cards_html += f"""<div style="flex:1; min-width:140px; background:rgba(255,255,255,0.85); border:1px solid rgba(0,0,0,0.06); border-radius:12px; padding:12px; text-align:center;"><img src="{img}" style="width:70px; height:70px; object-fit:cover; border-radius:8px; margin-bottom:8px;"><h6 style="font-size:0.85rem; font-weight:bold; margin:0 0 5px 0; height:32px; overflow:hidden;">{p['product_name']}</h6><p style="color:#6366f1; font-weight:800; font-size:1.1rem; margin:0 0 8px 0;">₹{p['price']}</p><div style="font-size:0.75rem; color:#64748b; margin-bottom:10px;">{p.get('category_name', 'Item')}</div><button style="background:#0f172a; color:white; border:none; padding:6px 10px; border-radius:6px; width:100%; font-size:0.8rem; cursor:pointer;" onclick="widgetAddToCart({p['product_id']})">Add to Cart</button></div>"""
+        cards_html += "</div>"
+
+        ui_queue_var.get().append(clean_html(cards_html))
+        return f"Comparison cards displayed for {results[0]['product_name']} vs {results[1]['product_name']}."
     except Exception as e: return f"Comparison error: {str(e)}"
     finally: cursor.close(); close_db_connection(conn)
 
 def db_view_user_cart(user_id: int) -> str:
-    if user_id == 0: return "Please log in to inspect your cart."
+    if user_id == 0: return "Customer is not logged in. Ask them to login to view cart."
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT c.quantity, p.product_name, p.price, p.image_url FROM cart c JOIN products p ON c.product_id = p.product_id WHERE c.user_id = %s", (user_id,))
     items = cursor.fetchall()
     cursor.close(); close_db_connection(conn)
-    if not items: return "Your cart is currently empty."
+    if not items: return "The user's cart is empty."
     
     total = sum(item['price'] * item['quantity'] for item in items)
-    html = "<div style='display:flex; flex-direction:column; gap:8px; margin-top:5px;'>"
+    cards_html = "<div style='display:flex; flex-direction:column; gap:8px; margin-top:5px;'>"
     for item in items:
         img = item.get('image_url') or f"https://ui-avatars.com/api/?name={urllib.parse.quote(str(item.get('product_name')))}&background=random"
-        html += f"""
-        <div style="display: flex; gap: 10px; padding: 8px; background: rgba(255,255,255,0.7); border-radius: 10px; align-items: center;">
-            <img src="{img}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 6px;">
-            <div style="flex: 1;">
-                <b style="font-size: 0.85rem;">{item['product_name']}</b>
-                <div style="font-size: 0.75rem; color: #64748b;">Qty: {item['quantity']} × ₹{item['price']}</div>
-            </div>
-            <div style="font-weight: bold; color: #6366f1;">₹{item['price'] * item['quantity']}</div>
-        </div>
-        """
-    html += f"""
-        <div style="margin-top: 6px; padding-top: 8px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between;">
-            <b>Total:</b> <span style="font-weight: 800; color: #0f172a;">₹{total}</span>
-        </div>
-        <a href="cart.html" style="display: block; text-align: center; background: #6366f1; color: white; padding: 8px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 8px;">Go to Checkout</a>
-    </div>
-    """
-    return html
+        cards_html += f"""<div style="display:flex; gap:10px; padding:8px; background:rgba(255,255,255,0.85); border-radius:10px; align-items:center;"><img src="{img}" style="width:45px; height:45px; object-fit:cover; border-radius:6px;"><div style="flex:1;"><b style="font-size:0.85rem;">{item['product_name']}</b><div style="font-size:0.75rem; color:#64748b;">Qty: {item['quantity']} × ₹{item['price']}</div></div><div style="font-weight:bold; color:#6366f1;">₹{item['price'] * item['quantity']}</div></div>"""
+    cards_html += f"""<div style="margin-top:6px; padding-top:8px; border-top:1px dashed #cbd5e1; display:flex; justify-content:space-between;"><b>Total:</b> <span style="font-weight:800; color:#0f172a;">₹{total}</span></div><a href="cart.html" style="display:block; text-align:center; background:#6366f1; color:white; padding:8px; border-radius:8px; text-decoration:none; font-weight:bold; margin-top:8px;">Go to Checkout</a></div>"""
+
+    ui_queue_var.get().append(clean_html(cards_html))
+    return f"Displayed active cart. Total amount is ₹{total}."
 
 def db_add_item_to_cart(user_id: int, product_name: str, quantity: int = 1) -> str:
-    if user_id == 0: return "Please log in to add products to your cart."
+    if user_id == 0: return "Customer must be logged in to add items."
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT product_id, product_name FROM products WHERE product_name LIKE %s LIMIT 1", (f"%{product_name}%",))
     product = cursor.fetchone()
     if not product:
         cursor.close(); close_db_connection(conn)
-        return f"Could not find '{product_name}' in the store."
+        return f"Could not locate '{product_name}' in store catalog."
         
     cursor.execute("SELECT quantity FROM cart WHERE user_id = %s AND product_id = %s", (user_id, product['product_id']))
     if cursor.fetchone():
@@ -272,10 +239,10 @@ def db_add_item_to_cart(user_id: int, product_name: str, quantity: int = 1) -> s
         cursor.execute("INSERT INTO cart (user_id, product_id, quantity) VALUES (%s, %s, %s)", (user_id, product['product_id'], quantity))
         
     conn.commit(); cursor.close(); close_db_connection(conn)
-    return f"✅ Added {quantity}x **{product['product_name']}** to your cart! <a href='cart.html' style='color:#6366f1; font-weight:bold;'>View Cart</a>"
+    return f"Successfully added {quantity}x {product['product_name']} to cart."
 
 def db_get_user_order_history(user_id: int) -> str:
-    if user_id == 0: return "Please log in to view orders."
+    if user_id == 0: return "Customer must log in to view orders."
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("""
@@ -286,25 +253,18 @@ def db_get_user_order_history(user_id: int) -> str:
     """, (user_id,))
     orders = cursor.fetchall()
     cursor.close(); close_db_connection(conn)
-    if not orders: return "You have no previous orders."
+    if not orders: return "User has no order history."
     
-    html = "<div style='display:flex; flex-direction:column; gap:8px; margin-top:5px;'>"
+    cards_html = "<div style='display:flex; flex-direction:column; gap:8px; margin-top:5px;'>"
     for o in orders:
-        html += f"""
-        <div style="background: rgba(255,255,255,0.7); border-left: 4px solid #6366f1; padding: 8px 12px; border-radius: 0 8px 8px 0;">
-            <div style="display: flex; justify-content: space-between;">
-                <b>Order #{o['order_id']}</b>
-                <span style="font-size: 0.75rem; font-weight: bold;">{o['status'].upper()}</span>
-            </div>
-            <div style="font-size: 0.8rem; color: #475569;">Items: {o.get('items_summary', 'Catalog Items')}</div>
-            <div style="color: #6366f1; font-weight: bold; margin-top: 2px;">₹{o['total_amount']}</div>
-        </div>
-        """
-    html += "</div>"
-    return html
+        cards_html += f"""<div style="background:rgba(255,255,255,0.85); border-left:4px solid #6366f1; padding:8px 12px; border-radius:0 8px 8px 0;"><div style="display:flex; justify-content:space-between;"><b>Order #{o['order_id']}</b><span style="font-size:0.75rem; font-weight:bold;">{o['status'].upper()}</span></div><div style="font-size:0.8rem; color:#475569;">Items: {o.get('items_summary', 'Catalog Items')}</div><div style="color:#6366f1; font-weight:bold; margin-top:2px;">₹{o['total_amount']}</div></div>"""
+    cards_html += "</div>"
+
+    ui_queue_var.get().append(clean_html(cards_html))
+    return f"Displayed last {len(orders)} order(s) on screen."
 
 def db_cancel_order(user_id: int, order_id: int) -> str:
-    if user_id == 0: return "Please log in."
+    if user_id == 0: return "Customer must log in to cancel an order."
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT status FROM orders WHERE order_id = %s AND user_id = %s", (order_id, user_id))
@@ -319,7 +279,7 @@ def db_cancel_order(user_id: int, order_id: int) -> str:
     cursor.execute("UPDATE orders SET status = 'cancelled' WHERE order_id = %s", (order_id,))
     cursor.execute("UPDATE products p JOIN order_items oi ON p.product_id = oi.product_id SET p.stock = p.stock + oi.quantity WHERE oi.order_id = %s", (order_id,))
     conn.commit(); cursor.close(); close_db_connection(conn)
-    return f"✅ Order #{order_id} has been successfully cancelled."
+    return f"Order #{order_id} has been cancelled."
 
 # =====================================================================
 # 3. MULTI-AGENT GRAPH ARCHITECTURE
@@ -328,10 +288,7 @@ def db_cancel_order(user_id: int, order_id: int) -> str:
 def get_sales_tools(safe_user_id: int):
     @tool
     def search_catalog(search_keywords: str, category: Optional[str] = None, max_price: Optional[int] = None) -> str:
-        """
-        Search catalog with full synonym flexibility. 
-        Pass multiple space-separated synonyms in `search_keywords` (e.g., 'phone mobile smartphone iphone').
-        """
+        """Search catalog with synonyms (e.g., search_keywords='phone mobile smartphone'). Call this tool only once per turn."""
         return db_smart_product_search(search_keywords=search_keywords, category=category, max_price=max_price, user_id=safe_user_id)
 
     @tool
@@ -341,7 +298,7 @@ def get_sales_tools(safe_user_id: int):
 
     @tool
     def view_cart() -> str:
-        """View the current shopping cart contents and total."""
+        """View the current shopping cart contents."""
         return db_view_user_cart(safe_user_id)
 
     @tool
@@ -351,19 +308,19 @@ def get_sales_tools(safe_user_id: int):
 
     @tool
     def get_order_history() -> str:
-        """View the customer's recent orders and statuses."""
+        """View the customer's recent orders."""
         return db_get_user_order_history(safe_user_id)
 
     @tool
     def cancel_order(order_id: int) -> str:
-        """Cancel an order using its order ID."""
+        """Cancel an order using its integer ID."""
         return db_cancel_order(safe_user_id, order_id)
 
     return [search_catalog, compare_products, view_cart, add_to_cart, get_order_history, cancel_order]
 
 class RouteDefinition(BaseModel):
     next_node: Literal["Sales", "Support"] = Field(
-        description="Route to 'Sales' for any shopping, search, products, cart, or order actions. Route to 'Support' for greetings, policies, warranties, or shipping."
+        description="Route to 'Sales' for product browsing, search, recommendations, cart, or orders. Route to 'Support' for greetings, store policies, warranties, or shipping."
     )
 
 class AgentState(TypedDict):
@@ -372,12 +329,11 @@ class AgentState(TypedDict):
     user_id: int
 
 def supervisor_node(state: AgentState):
-    # Fast, structured intent routing using your authorized Groq tier model
     llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0)
     system_prompt = (
-        "You are the Supervisor for AI Store. Classify the customer query:\n"
-        "- Route to 'Sales': Buying advice, looking for items (phones, laptops, accessories, etc.), cart management, orders.\n"
-        "- Route to 'Support': Greetings ('hi', 'hello'), returns, warranties, delivery times, shipping costs, FAQs."
+        "Classify user message destination:\n"
+        "- 'Sales': Finding/recommending products (phones, laptops, accessories), cart, checkout, orders.\n"
+        "- 'Support': Greetings ('hi', 'hello', 'hey'), policies, delivery, returns, FAQs."
     )
     messages = [{"role": "system", "content": system_prompt}] + state["messages"]
     response = llm.with_structured_output(RouteDefinition).invoke(messages)
@@ -386,36 +342,30 @@ def supervisor_node(state: AgentState):
 def sales_node(state: AgentState):
     user_ctx = db_get_user_context(state["user_id"])
     store_meta = get_store_metadata()
-    categories_str = ", ".join(store_meta["categories"]) if store_meta["categories"] else "Electronics, Laptops, Smartphones, Accessories"
+    categories_str = ", ".join(store_meta["categories"]) if store_meta["categories"] else "Electronics, Smartphones, Laptops, Accessories"
 
-    sales_prompt = f"""You are an elite, proactive AI Shopping Consultant at AI Store.
+    sales_prompt = f"""You are the AI Shopping Advisor at AI Store.
 {user_ctx}
-STORE DEPARTMENTS: [{categories_str}]
+DEPARTMENTS: [{categories_str}]
 
-CRITICAL CAPABILITIES:
-1. SYNONYM MASTERY: You understand natural synonyms instinctively.
-   - If a customer says 'mobile', 'cell', 'phone', or 'handset', you search for smartphones.
-   - If they say 'laptop', 'notebook', or 'mac', you search computers.
-   - When calling `search_catalog`, always populate `search_keywords` with relevant synonyms (e.g. search_keywords="phone mobile smartphone iphone").
-2. CONVERSATIONAL CONSULTANT:
-   - When the search tool displays products, DO NOT stay silent. Explain why these options fit the user's request.
-   - Ask clarifying questions if needed (e.g. "Are you looking for high battery life or gaming performance?").
-   - Guide them smoothly to add items to their cart.
+STRICT RULES:
+1. Call `search_catalog` AT MOST ONCE per turn. Combine relevant synonyms into `search_keywords` (e.g. search_keywords='phone mobile smartphone'). Never make multiple duplicate search calls.
+2. The UI cards are rendered automatically on the user's screen. Do not output raw HTML in your reply.
+3. Provide a helpful, concise summary of the options found and offer to add items to their cart.
 """
-    llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.3)
+    llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.2)
     agent = create_react_agent(llm, get_sales_tools(state["user_id"]))
     
-    # Version-agnostic system prompt injection
     input_messages = [SystemMessage(content=sales_prompt)] + state["messages"]
     result = agent.invoke({"messages": input_messages})
     new_messages = result["messages"][len(input_messages):]
     return {"messages": new_messages}
 
 def support_node(state: AgentState):
-    support_prompt = """You are the Support Concierge for AI Store.
-- If the customer says hello or introduces themselves, greet them warmly and invite them to explore products or check their orders.
-- If they ask about policies, shipping timelines, returns, or store warehouse location, use `search_knowledge_base` and explain the answer conversationally.
-- Never answer with a raw data dump; be friendly, clear, and reassuring."""
+    support_prompt = """You are the Customer Support Concierge at AI Store.
+- If the customer sends a greeting, greet them warmly and suggest what they can browse.
+- If they ask about policies, shipping timelines, or returns, run `search_knowledge_base` and explain the answer conversationally.
+- Never output raw HTML; speak naturally in plain text."""
 
     llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.2)
     agent = create_react_agent(llm, [search_knowledge_base])
@@ -425,7 +375,7 @@ def support_node(state: AgentState):
     new_messages = result["messages"][len(input_messages):]
     return {"messages": new_messages}
 
-# Build the Graph
+# Build Graph
 builder = StateGraph(AgentState)
 builder.add_node("Supervisor", supervisor_node)
 builder.add_node("Sales", sales_node)
@@ -448,6 +398,9 @@ async def process_chat(request: ChatRequest):
     safe_user_id = request.user_id if request.user_id else 0
 
     async def generate_stream():
+        ui_queue = []
+        ui_queue_var.set(ui_queue)
+        
         config = {"configurable": {"thread_id": str(safe_user_id)}}
         initial_state = {"messages": [HumanMessage(content=request.message)], "user_id": safe_user_id}
 
@@ -455,20 +408,23 @@ async def process_chat(request: ChatRequest):
             async for event in multi_agent_graph.astream_events(initial_state, config, version="v2"):
                 kind = event["event"]
                 
+                # Stream LLM conversational text tokens
                 if kind == "on_chat_model_stream":
                     chunk = event["data"]["chunk"].content
                     if chunk: 
                         yield f"data: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
                         
+                # Stream thought banner updates
                 elif kind == "on_tool_start":
                     tool_name = event["name"]
-                    yield f"data: {json.dumps({'type': 'thought', 'content': f'Analyzing catalog via {tool_name}...'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'thought', 'content': f'Checking catalog via {tool_name}...'})}\n\n"
                     
+                # Stream clean, queued HTML UI cards (bypasses raw ToolMessage repr)
                 elif kind == "on_tool_end":
-                    tool_name = event["name"]
-                    output = event["data"].get("output", "")
-                    if tool_name not in ["search_knowledge_base", "RouteDefinition"]:
-                        yield f"data: {json.dumps({'type': 'ui_block', 'content': str(output)})}\n\n"
+                    current_queue = ui_queue_var.get()
+                    while current_queue:
+                        html_card = current_queue.pop(0)
+                        yield f"data: {json.dumps({'type': 'ui_block', 'content': html_card})}\n\n"
 
         except Exception as e:
             print("Chat Agent Runtime Error:", str(e))
