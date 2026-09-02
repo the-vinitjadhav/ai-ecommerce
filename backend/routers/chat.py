@@ -7,8 +7,6 @@ from typing import Optional, Literal, TypedDict, Annotated
 
 # --- LangChain & LangGraph Imports ---
 from langchain_groq import ChatGroq
-from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
@@ -27,8 +25,6 @@ router = APIRouter(prefix="/api/chat", tags=["AI Agent"])
 # =====================================================================
 # 1. RAG INITIALIZATION & PROACTIVE PERSONALIZATION
 # =====================================================================
-print("Loading RAG Embeddings & Vector DB...")
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 KNOWLEDGE_DOCS = [
     "Shipping Policy: Standard shipping takes 3-5 business days. Expedited takes 1-2 days. Shipping is free for orders over ₹10,000.",
@@ -38,16 +34,25 @@ KNOWLEDGE_DOCS = [
     "Customer Support: You can reach our 24/7 support team by emailing support@aistore.com.",
     "Store Location: Our primary warehouse is located in Pune, Maharashtra, India."
 ]
-vector_db = FAISS.from_texts(KNOWLEDGE_DOCS, embeddings)
 
-# FIX: Custom RAG Tool to bypass the broken LangChain import
 @tool
 def search_knowledge_base(query: str) -> str:
     """Searches company policies, shipping rules, warranties, and FAQs."""
-    docs = vector_db.similarity_search(query, k=2)
-    if not docs:
-        return "No relevant policies found for that query."
-    return "\n\n".join([doc.page_content for doc in docs])
+    # Lightweight, Zero-RAM RAG implementation using native Python
+    query_words = query.lower().split()
+    scored_docs = []
+    
+    for doc in KNOWLEDGE_DOCS:
+        score = sum(1 for word in query_words if word in doc.lower())
+        scored_docs.append((score, doc))
+        
+    scored_docs.sort(key=lambda x: x[0], reverse=True)
+    best_docs = [doc for score, doc in scored_docs if score > 0][:2]
+    
+    if not best_docs:
+        return "\n".join(KNOWLEDGE_DOCS[:3])
+        
+    return "\n\n".join(best_docs)
 
 def db_get_user_context(user_id: int) -> str:
     """Proactively fetches user history to inject into the AI's brain before they even ask."""
