@@ -9,7 +9,6 @@ from typing import Optional, Literal, TypedDict, Annotated
 from langchain_groq import ChatGroq
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain.tools.retriever import create_retriever_tool
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
@@ -40,11 +39,15 @@ KNOWLEDGE_DOCS = [
     "Store Location: Our primary warehouse is located in Pune, Maharashtra, India."
 ]
 vector_db = FAISS.from_texts(KNOWLEDGE_DOCS, embeddings)
-rag_tool = create_retriever_tool(
-    vector_db.as_retriever(search_kwargs={"k": 2}),
-    "search_knowledge_base",
-    "Searches company policies, shipping rules, warranties, and FAQs."
-)
+
+# FIX: Custom RAG Tool to bypass the broken LangChain import
+@tool
+def search_knowledge_base(query: str) -> str:
+    """Searches company policies, shipping rules, warranties, and FAQs."""
+    docs = vector_db.similarity_search(query, k=2)
+    if not docs:
+        return "No relevant policies found for that query."
+    return "\n\n".join([doc.page_content for doc in docs])
 
 def db_get_user_context(user_id: int) -> str:
     """Proactively fetches user history to inject into the AI's brain before they even ask."""
@@ -502,7 +505,7 @@ def get_sales_tools(safe_user_id: int):
 
 class RouteDefinition(BaseModel):
     next_node: Literal["Sales", "Support"] = Field(
-        description="Route to 'Sales' for product searches, carts, checkouts, and orders. Route to 'Support' for policies, shipping, and FAQs."
+        description="Route to 'Sales' for product searches, carts, checkouts, and orders. Route to 'Support' for greetings, policies, shipping, and FAQs."
     )
 
 class AgentState(TypedDict):
@@ -533,7 +536,7 @@ def sales_node(state: AgentState):
 def support_node(state: AgentState):
     support_prompt = "You are the Support Agent. If the user says hello, greet them. If they ask about policies, use search_knowledge_base. Answer conversationally in text."
     llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.1)
-    agent = create_react_agent(llm, [rag_tool], state_modifier=support_prompt)
+    agent = create_react_agent(llm, [search_knowledge_base], state_modifier=support_prompt)
     result = agent.invoke({"messages": state["messages"]})
     return {"messages": result["messages"]}
 
