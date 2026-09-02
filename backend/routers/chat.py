@@ -501,8 +501,8 @@ def get_sales_tools(safe_user_id: int):
     return [get_product_recommendation, compare_products, get_product_details, find_cheaper_alternative, get_user_order_history, view_user_cart, add_item_to_cart, remove_item_from_cart, place_order, checkout_cart, check_order_status, modify_order, cancel_order, cancel_all_orders]
 
 class RouteDefinition(BaseModel):
-    next_node: Literal["Sales", "Support", "FINISH"] = Field(
-        description="Route to 'Sales' for product searches, carts, checkouts, and orders. Route to 'Support' for policies, shipping, and FAQs. Route to 'FINISH' if answering a casual greeting like 'hello'."
+    next_node: Literal["Sales", "Support"] = Field(
+        description="Route to 'Sales' for product searches, carts, checkouts, and orders. Route to 'Support' for greetings, policies, shipping, and FAQs."
     )
 
 class AgentState(TypedDict):
@@ -511,7 +511,7 @@ class AgentState(TypedDict):
     user_id: int
 
 def supervisor_node(state: AgentState):
-    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0) # Fast router
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0) # FIXED MODEL
     system_prompt = "You are the AI Supervisor. Read the user's message and determine the correct department to route to."
     messages = [{"role": "system", "content": system_prompt}] + state["messages"]
     
@@ -531,7 +531,7 @@ def sales_node(state: AgentState):
     return {"messages": result["messages"]}
 
 def support_node(state: AgentState):
-    support_prompt = "You are the Support Agent. Use search_knowledge_base to read store policies. Answer conversationally in text."
+    support_prompt = "You are the Support Agent. If the user says hello, greet them. If they ask about policies, use search_knowledge_base. Answer conversationally in text."
     llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.1)
     agent = create_react_agent(llm, [rag_tool], state_modifier=support_prompt)
     result = agent.invoke({"messages": state["messages"]})
@@ -544,7 +544,7 @@ builder.add_node("Sales", sales_node)
 builder.add_node("Support", support_node)
 
 builder.add_edge(START, "Supervisor")
-builder.add_conditional_edges("Supervisor", lambda state: state["next_node"], {"Sales": "Sales", "Support": "Support", "FINISH": END})
+builder.add_conditional_edges("Supervisor", lambda state: state["next_node"], {"Sales": "Sales", "Support": "Support"})
 builder.add_edge("Sales", END)
 builder.add_edge("Support", END)
 
@@ -563,30 +563,37 @@ async def process_chat(request: ChatRequest):
         config = {"configurable": {"thread_id": str(safe_user_id)}}
         initial_state = {"messages": [HumanMessage(content=request.message)], "user_id": safe_user_id}
 
-        # Streams internal LangGraph "Thought" events to the frontend in real-time
-        async for event in multi_agent_graph.astream_events(initial_state, config, version="v2"):
-            kind = event["event"]
-            
-            # Emit Text Tokens (When the LLM speaks naturally)
-            if kind == "on_chat_model_stream":
-                chunk = event["data"]["chunk"].content
-                if chunk: 
-                    yield f"data: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
-                    
-            # Emit "Thought" Logging (When the Agent decides to use a Tool)
-            elif kind == "on_tool_start":
-                tool_name = event["name"]
-                yield f"data: {json.dumps({'type': 'thought', 'content': f'Running {tool_name} transaction...'})}\n\n"
+        try:
+            # Streams internal LangGraph "Thought" events to the frontend in real-time
+            async for event in multi_agent_graph.astream_events(initial_state, config, version="v2"):
+                kind = event["event"]
                 
-            # Emit Final HTML UI Blocks (Intercepted dynamically)
-            elif kind == "on_tool_end":
-                tool_name = event["name"]
-                output = event["data"].get("output", "")
-                if tool_name != "search_knowledge_base" and tool_name != "RouteDefinition":
-                    yield f"data: {json.dumps({'type': 'ui_block', 'content': str(output)})}\n\n"
+                # Emit Text Tokens (When the LLM speaks naturally)
+                if kind == "on_chat_model_stream":
+                    chunk = event["data"]["chunk"].content
+                    if chunk: 
+                        yield f"data: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
+                        
+                # Emit "Thought" Logging (When the Agent decides to use a Tool)
+                elif kind == "on_tool_start":
+                    tool_name = event["name"]
+                    yield f"data: {json.dumps({'type': 'thought', 'content': f'Running {tool_name} transaction...'})}\n\n"
+                    
+                # Emit Final HTML UI Blocks (Intercepted dynamically)
+                elif kind == "on_tool_end":
+                    tool_name = event["name"]
+                    output = event["data"].get("output", "")
+                    if tool_name != "search_knowledge_base" and tool_name != "RouteDefinition":
+                        yield f"data: {json.dumps({'type': 'ui_block', 'content': str(output)})}\n\n"
 
-        # Signal completion to frontend
-        yield f"data: {json.dumps({'type': 'end'})}\n\n"
+        except Exception as e:
+            # Prevents the backend from crashing silently and sends the error to the chat UI
+            print(f"Streaming Error: {e}")
+            yield f"data: {json.dumps({'type': 'text', 'content': f'Sorry, an internal error occurred: {str(e)}'})}\n\n"
+            
+        finally:
+            # Signal completion to frontend so the loading banner disappears
+            yield f"data: {json.dumps({'type': 'end'})}\n\n"
 
     # StreamingResponse replaces standard JSON return
     return StreamingResponse(generate_stream(), media_type="text/event-stream")
