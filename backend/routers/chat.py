@@ -544,7 +544,8 @@ def sales_node(state: AgentState):
     RULE 2: Your tools generate HTML. Do not summarize their output. When a tool finishes successfully, output exactly: "DONE"."""
     
     llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.1)
-    agent = create_react_agent(llm, get_sales_tools(state["user_id"]), state_modifier=sales_prompt)
+    # FIXED: Changed state_modifier to messages_modifier
+    agent = create_react_agent(llm, get_sales_tools(state["user_id"]), messages_modifier=SystemMessage(content=sales_prompt))
     result = agent.invoke({"messages": state["messages"]})
     return {"messages": result["messages"]}
 
@@ -552,7 +553,8 @@ def support_node(state: AgentState):
     support_prompt = "You are the Support Agent. If the user says hello, greet them. If they ask about policies, use search_knowledge_base. Answer conversationally in text."
     
     llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.1)
-    agent = create_react_agent(llm, [search_knowledge_base], state_modifier=support_prompt)
+    # FIXED: Changed state_modifier to messages_modifier
+    agent = create_react_agent(llm, [search_knowledge_base], messages_modifier=SystemMessage(content=support_prompt))
     result = agent.invoke({"messages": state["messages"]})
     return {"messages": result["messages"]}
 
