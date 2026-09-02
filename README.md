@@ -1,39 +1,102 @@
-# 🤖 AI-Powered E-Commerce Platform
+# 🛒 AI-Powered E-Commerce Platform & Multi-Agent Assistant
 
-A modern, full-stack e-commerce application integrated with an autonomous AI shopping assistant. This project demonstrates how a Large Language Model (LLM) can safely and deterministically interact with a relational database to drive conversational sales, manage shopping carts, and handle post-purchase operations like tracking and cancellations.
+A modern, full-stack e-commerce platform featuring an autonomous, multi-agent AI shopping assistant. Built with FastAPI, LangGraph, and MySQL, this project demonstrates advanced LLM orchestration, highly optimized RAG (Retrieval-Augmented Generation), and real-time Server-Sent Events (SSE) streaming.
 
-## ✨ Key Features
+Designed to operate within strict PaaS constraints (512MB RAM limits) and third-party API rate limits, this architecture bypasses heavy machine learning dependencies in favor of lightweight, custom-built algorithms.
 
-* **13-Tool Agentic Function Calling:** Powered by Meta's Llama 3.3 70B, the AI acts as an intent router. It executes specific database actions—like dynamic product searches, in-chat checkouts, and bulk order cancellations—without generating raw conversational filler.
-* **90%+ Token & Cost Optimization:** The LLM is strictly constrained from generating heavy HTML markup. It outputs tiny, structured JSON payloads (10–30 tokens) that the Python backend parses and renders into deterministic UI components.
-* **Sub-Second Performance:** Combining Groq's LPU inference acceleration with FastAPI's asynchronous event loop yields total end-to-end latency (User Prompt ➔ LLM Tool Call ➔ SQL Execution ➔ UI Render) of just **~300–600ms**.
-* **Zero-Trust Security:** Mitigates prompt injection and cross-account manipulation ("Ghost Carts") by blinding the AI to user IDs. The backend extracts JWT tokens and injects verified authentication states directly into the SQL queries.
-* **Atomic Database Transactions:** Complex operations, such as entire cart checkouts and inventory restocking, are executed via atomic MySQL transaction loops (`commit`/`rollback`) to guarantee inventory synchronization.
+## ✨ Key Engineering Features
 
-## 🛠️ Tech Stack
+* **Multi-Agent Orchestration (LangGraph):** Utilizes a fast Supervisor model to instantly classify user intent, routing requests to specialized "Sales" or "Support" agents to reduce latency and optimize API token usage.
+* **Zero-RAM Lexical RAG Engine:** Replaced resource-heavy vector databases (FAISS/Pinecone) and 3GB PyTorch dependencies with a highly optimized, native-Python lexical search. Dynamically fetches real-time store policies from the MySQL database with zero extra RAM footprint.
+* **Intelligent Catalog Search:** Implements a fuzzy-matching search algorithm with synonym expansion. The AI understands informal queries (e.g., "mobiles", "kicks") and maps them to strict database schema categories without hallucinations.
+* **Deterministic Autonomous Tools:** Features 14 strict SQL-bound tools (Add to Cart, View Order History, Compare Products, Cancel Order) that the LLM executes autonomously, ensuring safe database interactions without SQL injection vulnerabilities.
+* **Asynchronous SSE Streaming:** A decoupled UI streaming architecture that pushes LangGraph "thought processes," natural language text tokens, and rich HTML UI cards to the frontend in real-time, while feeding compressed text summaries back to the LLM to prevent TPM (Tokens Per Minute) rate-limit exhaustion.
 
-* **Frontend:** Vanilla JavaScript, HTML5, Bootstrap 5
-* **Backend API:** Python, FastAPI, Uvicorn
-* **Database:** MySQL 
-* **AI Engine:** Meta Llama 3.3 70B (via Groq API)
-* **Cloud Architecture:** Vercel (Edge CDN), Render (Backend Compute), Aiven (Managed MySQL)
+## 🛠️ Technology Stack
 
-## 🏗️ Architecture Flow
+| Component | Technology |
+| --- | --- |
+| **Backend Framework** | FastAPI, Uvicorn, Python 3.10+ |
+| **AI / LLM Orchestration** | LangGraph, LangChain, Groq API (gpt-oss-120b / gpt-oss-20b) |
+| **Database** | MySQL (Aiven), `mysql-connector-python` |
+| **Frontend** | HTML5, CSS3, Vanilla JavaScript, Bootstrap 5 |
+| **Authentication** | JWT (JSON Web Tokens), bcrypt |
+| **Streaming Protocol** | Server-Sent Events (SSE) |
 
-1. **Client Request:** The user interacts with the chat widget; frontend sends payload + JWT to the backend.
-2. **Intent Routing:** FastAPI sends the conversational context and a strict 13-tool JSON schema to the Groq API.
-3. **Parameter Extraction:** The LLM bypasses text generation, selecting the appropriate tool and extracting structured arguments (e.g., `product_name`, `quantity`).
-4. **Deterministic Execution:** Python parses the JSON, validates arguments, runs parameterized SQL queries against MySQL, and safely formats the response.
-5. **UI Update:** The backend returns raw HTML snippets or Markdown strings to update the client's chat interface.
+## 🏗️ Multi-Agent Architecture Flow
 
-## 🚀 Local Setup & Installation
+1. **User Input:** The user types a query in the frontend chat widget.
+2. **Supervisor Node:** A fast, low-temperature LLM evaluates the prompt.
+* *If shopping/cart/orders:* Routes to **Sales Node**.
+* *If policies/greeting/FAQ:* Routes to **Support Node**.
 
-### Prerequisites
-* Python 3.9+
-* MySQL Server
-* Groq API Key
+
+3. **Agent Execution:**
+* The **Sales Agent** uses SQL tools to search inventory, compare items, and manage the cart.
+* The **Support Agent** uses the Lexical RAG tool to pull live store policies from the database.
+
+
+4. **Decoupled UI Streaming:** The tool executions generate rich HTML blocks sent directly to the user's screen via SSE, while returning tiny text summaries back to the LLM to maintain conversation memory securely and cheaply.
+
+## 🚀 Installation & Setup
 
 ### 1. Clone the Repository
+
 ```bash
-git clone [https://github.com/the-vinitjadhav/ai-ecommerce.git](https://github.com/the-vinitjadhav/ai-ecommerce.git)
-cd ai-ecommerce
+git clone https://github.com/the-vinitjadhav/ai-ecommerce-platform.git
+cd ai-ecommerce-platform
+
+```
+
+### 2. Set Up a Virtual Environment
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
+
+```
+
+### 3. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+
+```
+
+### 4. Environment Variables
+
+Create a `.env` file in the root directory and add your credentials:
+
+```env
+# Database Configuration (Aiven or Local)
+DB_HOST=your_mysql_host
+DB_USER=your_mysql_user
+DB_PASSWORD=your_mysql_password
+DB_NAME=your_database_name
+DB_PORT=3306
+
+# Groq API Configuration
+GROQ_API_KEY=your_groq_api_key
+
+# Authentication
+SECRET_KEY=your_jwt_secret_key
+ALGORITHM=HS256
+
+```
+
+### 5. Database Initialization
+
+Execute the provided SQL schemas in your MySQL database to create the `users`, `products`, `cart`, `orders`, `order_items`, and `store_policies` tables. Make sure to populate the `store_policies` table with initial data.
+
+### 6. Run the Application
+
+```bash
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
+```
+
+The backend API will be available at `http://localhost:8000`. Serve the frontend `index.html` file using any standard local web server (e.g., Live Server extension or `python -m http.server`).
+
+---
+
+**Author:** [Vinit Jadhav](https://www.google.com/search?q=https://github.com/the-vinitjadhav)
