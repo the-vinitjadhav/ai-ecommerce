@@ -1,7 +1,3 @@
-// ============================================================
-// FILE: frontend/js/cart.js 
-// ============================================================
-
 document.addEventListener('DOMContentLoaded', function() {
     loadCartAndUpdate();
     checkAuth();

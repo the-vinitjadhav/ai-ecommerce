@@ -1,8 +1,3 @@
-// ============================================================
-// FILE: frontend/js/auth.js
-// PURPOSE: Handle Login and Registration forms and redirects
-// ============================================================
-
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');

@@ -1,9 +1,3 @@
-// ============================================================
-// FILE: frontend/js/profile.js
-// PURPOSE: Self-Contained Profile Dashboard Logic
-// ============================================================
-
-// THE FIX: Define the absolute backend URL so fetches don't fail!
 const BACKEND_URL = "https://ai-ecommerce-backend-barh.onrender.com";
 
 document.addEventListener('DOMContentLoaded', async function() {

@@ -1,8 +1,3 @@
-// ============================================================
-// FILE: frontend/js/chat.js
-// PURPOSE: Advanced SSE Streaming AI Chat
-// ============================================================
-
 document.addEventListener('DOMContentLoaded', function() {
     const userId = localStorage.getItem('userId');
     if (!userId) {
@@ -31,7 +26,6 @@ async function sendMessage() {
         addMessage('system', 'Please login first!');
         return;
     }
-    
     input.value = '';
     input.disabled = true;
     sendBtn.disabled = true;
@@ -135,7 +129,7 @@ function createEmptyAIBubble() {
     
     let bubble = document.createElement('div');
     bubble.className = 'bubble';
-    
+      
     div.appendChild(bubble);
     container.appendChild(div);
     scrollToBottom();
@@ -186,4 +180,4 @@ function createEmptyUserBubble() {
 function scrollToBottom() {
     const container = document.getElementById('chat-messages');
     container.scrollTop = container.scrollHeight;
-}
+} 

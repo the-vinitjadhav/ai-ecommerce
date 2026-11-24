@@ -9,6 +9,7 @@ pyjwt
 bcrypt
 python-multipart
 langchain
+langchain[mcp]>=1.4.0
 langgraph
 langchain-groq
 langchain-community

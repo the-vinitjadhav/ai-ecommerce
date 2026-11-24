@@ -1,8 +1,3 @@
-// ============================================================
-// FILE: frontend/js/widget-chat.js
-// PURPOSE: SSE Streaming Chat Widget
-// ============================================================
-
 document.addEventListener('DOMContentLoaded', function() {
     enforceGlobalAuth();
     const container = document.getElementById('ai-chat-widget-container');

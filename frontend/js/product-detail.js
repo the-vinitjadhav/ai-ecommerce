@@ -1,8 +1,3 @@
-// ============================================================
-// FILE: frontend/js/product-detail.js
-// PURPOSE: Dynamic routing and rendering for single product
-// ============================================================
-
 document.addEventListener('DOMContentLoaded', async function() {
     checkAuth();
     updateCartCount();

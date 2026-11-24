@@ -1,7 +1,3 @@
-// ============================================================
-// FILE: frontend/js/admin.js
-// PURPOSE: Unified Admin Dashboard Logic & Analytics
-// ============================================================
 let globalProductsList = []; 
 let salesChartInstance = null;
 

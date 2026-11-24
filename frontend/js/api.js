@@ -1,14 +1,5 @@
-// ============================================================
-// FILE: frontend/js/api.js
-// PURPOSE: All API calls to the backend
-// ============================================================
-
-// API base URL - Your Live Render Backend
 const API_BASE = 'https://ai-ecommerce-backend-barh.onrender.com/api';
 
-// ============================================================
-// Generic fetch function (With JWT Token Injection)
-// ============================================================
 async function apiFetch(endpoint, options = {}) {
     const method = options.method || 'GET';
     const url = `${API_BASE}${endpoint}`;
@@ -54,9 +45,6 @@ async function apiFetch(endpoint, options = {}) {
     }
 }
 
-// ============================================================
-// AUTH FUNCTIONS
-// ============================================================
 async function registerUser(userData) {
     return apiFetch('/auth/register', {   
         method: 'POST',
@@ -82,9 +70,6 @@ async function updateUserProfile(userId, profileData) {
     });
 }
 
-// ============================================================
-// PRODUCT FUNCTIONS
-// ============================================================
 async function getProducts() {
     // Removed trailing slash to prevent CORS redirect bugs
     return apiFetch('/products/');

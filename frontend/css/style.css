@@ -8,7 +8,8 @@
     --primary: #6366f1;       /* Indigo 500 */
     --primary-glow: rgba(99, 102, 241, 0.4);
     --secondary: #a855f7;     /* Purple 500 */
-    --accent: #06b6d4;        /* Cyan 500 */
+    --accent: #06b6d4;     
+       /* Cyan 500 */
     
     /* Backgrounds & Surfaces */
     --bg-body: #f4f4f9;       /* Ultra-soft cool gray */
